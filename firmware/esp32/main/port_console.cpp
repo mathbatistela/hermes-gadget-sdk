@@ -46,6 +46,15 @@ void begin() {
   static const char* const kCommands[] = {"help",      "status", "diag",   "get",         "set",       "say",
                                           "talk",      "release", "cancel", "new-session", "reconnect", "forget-key",
                                           "factory-reset", "settings", "wifi-setup", "wifi", "phone", "perf"};
+#if CONFIG_HG_LVGL_SPIKE
+  {  // the LVGL spike's benchmark (port_lvgl_spike.cpp); main.cpp answers it on the app task
+    esp_console_cmd_t cmd = {};
+    cmd.command = "lvgl";
+    cmd.help = "LVGL spike: benchmark LVGL on the panel (lvgl [seconds per scene])";
+    cmd.func = &run;
+    esp_console_cmd_register(&cmd);
+  }
+#endif
   for (const char* name : kCommands) {
     esp_console_cmd_t cmd = {};
     cmd.command = name;

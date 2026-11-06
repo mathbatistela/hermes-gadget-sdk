@@ -70,6 +70,24 @@ menu "Hermes Gadget"
         default 10
         range 0 3600
 
+    config HG_LVGL_SPIKE
+        bool "LVGL spike: the console's 'lvgl' command benchmarks LVGL on the panel"
+        default n
+        help
+            Experimental. Builds LVGL 9 in and adds a console command, 'lvgl',
+            that takes the screen for a few seconds, renders three LVGL scenes
+            (a full-screen scrolling list, a live chart, a spinner) through the
+            port's own Display::flush, and prints frames per second, render and
+            flush time, and the memory LVGL took. The device UI comes back after.
+
+    config HG_LCD_SPI_MHZ_OVERRIDE
+        int "Override the board's SPI LCD clock (MHz, 0: the board's own)"
+        default 0
+        range 0 80
+        help
+            For measuring a panel at another clock without editing its board
+            profile. 0 keeps BoardConfig::lcd.spi_mhz.
+
     choice HG_BOARD
         prompt "Board"
         default HG_BOARD_ESP32S3_BREADBOARD

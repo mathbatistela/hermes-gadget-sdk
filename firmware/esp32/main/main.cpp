@@ -17,6 +17,9 @@
 #include "hg/touch.hpp"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+#if CONFIG_HG_LVGL_SPIKE
+#include "port_lvgl_spike.hpp"
+#endif
 #if CONFIG_HG_BOARD_WS_P4_TOUCH_LCD_7B
 #include "hg/crypto.hpp"
 #include "port_camera.hpp"
@@ -246,9 +249,18 @@ void dispatch(hg::App& app, hgp::Event& ev) {
     case EventType::Mic:
       app.on_mic_samples(reinterpret_cast<const int16_t*>(ev.data), ev.len / sizeof(int16_t));
       break;
-    case EventType::Console:
-      ev.console->answer(app.console(std::string_view(text ? text : "", ev.len)));
+    case EventType::Console: {
+      const std::string_view line(text ? text : "", ev.len);
+#if CONFIG_HG_LVGL_SPIKE
+      if (line == "lvgl" || line.substr(0, 5) == "lvgl ") {
+        ev.console->answer(hgp::lvgl_spike::run(g_display, line));
+        g_display.request_repaint();  // the device UI takes the screen back
+        break;
+      }
+#endif
+      ev.console->answer(app.console(line));
       break;
+    }
     case EventType::Touch:
       if (g_gestures && ev.len == sizeof(hgp::TouchSample)) {
         const auto* t = reinterpret_cast<const hgp::TouchSample*>(ev.data);

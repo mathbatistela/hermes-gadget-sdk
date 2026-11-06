@@ -1,6 +1,7 @@
 // SPI LCD panels via esp_lcd. The full framebuffer lives in PSRAM; rows are
 // copied through a small DMA-capable bounce buffer on flush.
 #include "port.hpp"  // first: pulls in FreeRTOS.h ahead of task.h/queue.h
+#include "sdkconfig.h"  // CONFIG_HG_LCD_SPI_MHZ_OVERRIDE
 
 #include <algorithm>
 #include <cstring>
@@ -62,7 +63,12 @@ bool SpiDisplay::on_trans_done(esp_lcd_panel_io_handle_t, esp_lcd_panel_io_event
   return false;
 }
 
-bool SpiDisplay::begin(const LcdConfig& cfg, i2c_master_bus_handle_t i2c_bus) {
+bool SpiDisplay::begin(const LcdConfig& board_cfg, i2c_master_bus_handle_t i2c_bus) {
+  LcdConfig cfg = board_cfg;
+#if CONFIG_HG_LCD_SPI_MHZ_OVERRIDE > 0
+  cfg.spi_mhz = CONFIG_HG_LCD_SPI_MHZ_OVERRIDE;  // Kconfig: measure the panel at another clock
+  ESP_LOGW(TAG, "SPI clock overridden to %d MHz", cfg.spi_mhz);
+#endif
   cfg_ = cfg;
   const bool qspi = cfg.controller == LcdController::St77916 || cfg.controller == LcdController::Sh8601 ||
                      cfg.controller == LcdController::Spd2010;

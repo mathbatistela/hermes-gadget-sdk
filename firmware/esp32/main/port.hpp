@@ -281,6 +281,8 @@ class SpiDisplay final : public hg::Display {
   int framebuffer_rows() const override { return frame_rows_ < cfg_.height ? frame_rows_ : 0; }
   void set_frame_origin(int y) override { frame_origin_ = y; }
   bool take_redraw_request() override { return repaint_.exchange(false, std::memory_order_relaxed); }
+  // Ask the app to repaint the whole screen on its next tick (after something else drew on it).
+  void request_repaint() { repaint_.store(true, std::memory_order_relaxed); }
   std::function<void(uint8_t)> board_backlight;
 
  private:

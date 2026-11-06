@@ -25,6 +25,13 @@ endif()
 if(IDF_TARGET STREQUAL "esp32s3" OR IDF_TARGET STREQUAL "esp32p4")
     list(APPEND HG_RGB_REQUIRES esp_lcd_st7701 esp_lcd_panel_io_additions)
 endif()
+# LVGL spike (Kconfig HG_LVGL_SPIKE): the console's `lvgl` benchmark. Off in every release build.
+set(HG_LVGL_SOURCES)
+set(HG_LVGL_REQUIRES)
+if(CONFIG_HG_LVGL_SPIKE)
+    list(APPEND HG_LVGL_SOURCES "port_lvgl_spike.cpp")
+    list(APPEND HG_LVGL_REQUIRES lvgl__lvgl)
+endif()
 idf_component_register(
     SRCS
         "main.cpp"
@@ -32,6 +39,7 @@ idf_component_register(
         "port_amoled.cpp"
         "port_audio.cpp"
         ${HG_P4_SOURCES}
+        ${HG_LVGL_SOURCES}
         "port_ble.cpp"
         "port_buttons.cpp"
         "port_codec.cpp"
@@ -82,6 +90,7 @@ idf_component_register(
         esp_lcd
         ${HG_RGB_REQUIRES}
         ${HG_P4_REQUIRES}
+        ${HG_LVGL_REQUIRES}
         esp_netif
         esp_http_server
         esp_psram
@@ -94,3 +103,9 @@ idf_component_register(
         # Empty unless CONFIG_HG_TAILNET (components/tailtiny).
         tailtiny
 )
+
+# LVGL spike: the project builds for size (-Os); LVGL's pixel loops get -O2.
+if(CONFIG_HG_LVGL_SPIKE)
+    idf_component_get_property(hg_lvgl_lib lvgl__lvgl COMPONENT_LIB)
+    target_compile_options(${hg_lvgl_lib} PRIVATE -O2)
+endif()
