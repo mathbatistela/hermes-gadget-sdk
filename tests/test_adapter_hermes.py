@@ -158,17 +158,64 @@ def test_an_agent_question_is_shown_and_spoken(gadget, make_sim, monkeypatch, tm
     sim = _paired_sim(gadget, make_sim)
     device_id = sim.status()["device_id"]
     result = gadget.run(gadget.adapter.send_clarify(
-        chat_id=device_id, question="Tag release 0.5.139 now?", choices=["Tag it", "Wait for Tony"],
+        chat_id=device_id, question="Tag release 0.5.139 now?", choices=["Tag it", "Wait for Tony", "Skip it"],
         clarify_id="c1", session_key="sk"))
     assert result.success
-    # Shown as Hermes's own numbered text: the next message, spoken or typed, answers it.
+    # Three choices don't fit a yes/no question: Hermes's own numbered text, the next message answers it.
     assert sim.wait_for(lambda: "Tag release 0.5.139 now?" in json.dumps(sim.received), timeout=5)
     assert "Wait for Tony" in json.dumps(sim.received)
+    assert sim.last_received("prompt") is None
     # And spoken, so a voice user hears the question instead of silence.
     assert sim.wait_for(lambda: sim.last_received("audio.end") is not None, timeout=10)
-    assert said == ["Tag release 0.5.139 now? The choices are 1: Tag it. 2: Wait for Tony. "
+    assert said == ["Tag release 0.5.139 now? The choices are 1: Tag it. 2: Wait for Tony. 3: Skip it. "
                     "Say the number or your own answer."]
     assert not list(tmp_path.glob("spoken-*.wav"))  # the TTS file is cleaned up
+
+
+def _two_way(gadget, sim, clarify_id, monkeypatch):
+    """Register a two-way clarify the way Hermes's clarify tool does, then send it."""
+    import tools.clarify_gateway as cg
+
+    resolved = []
+    real = cg.resolve_gateway_clarify
+    monkeypatch.setattr(cg, "resolve_gateway_clarify",
+                        lambda cid, response: resolved.append((cid, response)) or real(cid, response))
+    cg.register(clarify_id, "sk", "Restart adhd-board-api?", ["Restart", "Leave it"])
+    result = gadget.run(gadget.adapter.send_clarify(
+        chat_id=sim.status()["device_id"], question="Restart adhd-board-api?", choices=["Restart", "Leave it"],
+        clarify_id=clarify_id, session_key="sk"))
+    assert result.success
+    assert sim.wait_screen("prompt", timeout=5)
+    return resolved
+
+
+@pytest.mark.parametrize("button, answer", [("talk", "Restart"), ("cancel", "Leave it")])
+def test_a_two_way_question_is_a_device_yes_no(gadget, make_sim, monkeypatch, tmp_path, button, answer):
+    said = _fake_tts(monkeypatch, tmp_path)
+    sim = _paired_sim(gadget, make_sim)
+    resolved = _two_way(gadget, sim, f"c-{button}", monkeypatch)
+    shown = sim.last_received("prompt")
+    assert shown["title"] == "Restart adhd-board-api?"
+    assert shown["text"] == "Yes: Restart\nNo: Leave it"
+    assert sim.wait_for(lambda: said == ["Restart adhd-board-api?"], timeout=5)  # the choices are on screen
+
+    sim.run_for(0.7)  # the device ignores presses in the question's first 0.6 s
+    sim.tap(button)
+    assert sim.wait_for(lambda: resolved == [(f"c-{button}", answer)], timeout=5)
+    assert sim.wait_for(lambda: (sim.last_received("notice") or {}).get("text") == answer, timeout=5)
+
+
+def test_a_spoken_answer_takes_the_two_way_question_off_the_screen(gadget, make_sim, monkeypatch, tmp_path):
+    import tools.clarify_gateway as cg
+
+    _fake_tts(monkeypatch, tmp_path)
+    sim = _paired_sim(gadget, make_sim)
+    _two_way(gadget, sim, "c-voice", monkeypatch)
+    assert cg._entries["c-voice"].awaiting_text  # a spoken or typed answer still resolves it
+    gadget.run(gadget.adapter.retire_clarify_card("c-voice", "Answered: Restart"))
+    assert sim.wait_for(lambda: sim.last_received("prompt.close") is not None, timeout=5)
+    assert sim.wait_for(lambda: sim.status()["screen"] != "prompt", timeout=5)  # may still be speaking it
+    assert not gadget.adapter._prompts.get(sim.status()["device_id"])
 
 
 def test_an_open_question_is_spoken_as_asked(gadget, make_sim, monkeypatch, tmp_path):
