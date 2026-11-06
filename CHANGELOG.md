@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- New board profile `lcdwiki-es3c28p`, experimental, for the LCDWIKI ES3C28P (also sold as Freenove's ESP32-S3 2.8 inch display): a 2.8 inch 240×320 ILI9341V IPS panel over SPI in portrait (X mirrored), FT6336G touch, and one ES8311 for the onboard MEMS microphone and the speaker output. 16 MB flash and 8 MB octal PSRAM. Hold the screen or BOOT to talk; a swipe down cancels. The amplifier enable on GPIO 1 is active low, so it is held on from boot as a power rail. GPIO 9 reads the cell through a divider of two. There is no charge pin and no software power-off. The addressable RGB LED, the microSD slot and the extension pins are unused. Adds a `sim-240x320` simulator profile. Built, not yet run on a board. [Hardware](docs/hardware.md#lcdwiki-es3c28p).
+
 ## 0.5.0
 
 Hermes Gadget 0.5.0 adds a **Gadgets** page to the Hermes desktop app: a gadget that runs in the window, pairing with one click, a live copy of each device's screen, and buttons to send a card or run a device action. Profile faces come in colour on boards with PSRAM, and they blink and talk. The screen shows Russian, and Chinese as a build option. On boards with PSRAM a recording survives a lost connection, and larger network buffers keep the microphone up on slow links such as a phone hotspot. Eight experimental board profiles arrive: the M5Stack StickS3, the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B with camera capture, the Waveshare ESP32-S3-Touch-AMOLED-1.32 and 1.43C, the Waveshare ESP32-S3-Touch-LCD-1.83 and 1.46, the original Espressif ESP32-S3-BOX and the ESP32-S3-Korvo-2. Details by area follow.
