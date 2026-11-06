@@ -46,6 +46,15 @@ void begin() {
   static const char* const kCommands[] = {"help",      "status", "diag",   "get",         "set",       "say",
                                           "talk",      "release", "cancel", "new-session", "reconnect", "forget-key",
                                           "factory-reset", "settings", "wifi-setup", "wifi", "phone", "perf"};
+#if CONFIG_HG_WAKEWORD_SPIKE
+  {  // the wake word spike (port_wake_spike.cpp); main.cpp answers it on the app task
+    esp_console_cmd_t cmd = {};
+    cmd.command = "wake";
+    cmd.help = "Wake word spike: listen for Hey Hermes (wake [seconds] [90|95])";
+    cmd.func = &run;
+    esp_console_cmd_register(&cmd);
+  }
+#endif
   for (const char* name : kCommands) {
     esp_console_cmd_t cmd = {};
     cmd.command = name;

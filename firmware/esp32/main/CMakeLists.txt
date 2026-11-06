@@ -25,6 +25,13 @@ endif()
 if(IDF_TARGET STREQUAL "esp32s3" OR IDF_TARGET STREQUAL "esp32p4")
     list(APPEND HG_RGB_REQUIRES esp_lcd_st7701 esp_lcd_panel_io_additions)
 endif()
+# Wake word spike (Kconfig HG_WAKEWORD_SPIKE): the console's `wake`. Off in every release build.
+set(HG_WAKE_SOURCES)
+set(HG_WAKE_REQUIRES)
+if(CONFIG_HG_WAKEWORD_SPIKE)
+    list(APPEND HG_WAKE_SOURCES "port_wake_spike.cpp")
+    list(APPEND HG_WAKE_REQUIRES espressif__esp-sr)
+endif()
 idf_component_register(
     SRCS
         "main.cpp"
@@ -32,6 +39,7 @@ idf_component_register(
         "port_amoled.cpp"
         "port_audio.cpp"
         ${HG_P4_SOURCES}
+        ${HG_WAKE_SOURCES}
         "port_ble.cpp"
         "port_buttons.cpp"
         "port_codec.cpp"
@@ -82,6 +90,7 @@ idf_component_register(
         esp_lcd
         ${HG_RGB_REQUIRES}
         ${HG_P4_REQUIRES}
+        ${HG_WAKE_REQUIRES}
         esp_netif
         esp_http_server
         esp_psram

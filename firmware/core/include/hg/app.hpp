@@ -247,6 +247,9 @@ class App {
   // A turn is under way: listening, waiting for a reply, or responding, which lasts until the
   // reply has finished playing. The port keeps Wi-Fi at full power until it ends.
   bool in_turn() const { return mode_ != Mode::Idle; }
+  // Wake word spike: start a hands-free (VAD-ended) recording, as a tap does in tap
+  // mode. False when the device can't take one now (busy, offline, a menu or question).
+  bool wake_word_listen();
   // These run on the app task. Start returns private, on-screen instructions.
   std::function<std::string()> on_wifi_setup;
   std::function<void()> on_wifi_setup_close;

@@ -70,6 +70,17 @@ menu "Hermes Gadget"
         default 10
         range 0 3600
 
+    config HG_WAKEWORD_SPIKE
+        bool "Wake word spike: the console's 'wake' listens for Hey Hermes"
+        default n
+        depends on IDF_TARGET_ESP32S3
+        help
+            Experimental. Builds ESP-SR in (WakeNet10, "Hey Hermes") and adds a
+            console command, 'wake [seconds]', that keeps the microphone open for
+            that long, feeds it to WakeNet at 16 kHz, prints each detection, and
+            reports detect time, CPU share and the memory WakeNet took. Needs ESP-SR's
+            `model` partition (partitions-wakeword.csv).
+
     choice HG_BOARD
         prompt "Board"
         default HG_BOARD_ESP32S3_BREADBOARD

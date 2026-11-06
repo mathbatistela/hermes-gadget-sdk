@@ -63,3 +63,8 @@ dependencies:
     version: "2.5.0"
     rules:
       - if: target in [esp32p4]
+  # Wake word spike only (HG_WAKEWORD_SPIKE): WakeNet10 "Hey Hermes".
+  espressif/esp-sr:
+    version: "2.6.1"
+    rules:
+      - if: "$CONFIG{HG_WAKEWORD_SPIKE} == True"

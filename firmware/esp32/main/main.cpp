@@ -17,6 +17,9 @@
 #include "hg/touch.hpp"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+#if CONFIG_HG_WAKEWORD_SPIKE
+#include "port_wake_spike.hpp"
+#endif
 #if CONFIG_HG_BOARD_WS_P4_TOUCH_LCD_7B
 #include "hg/crypto.hpp"
 #include "port_camera.hpp"
@@ -244,11 +247,23 @@ void dispatch(hg::App& app, hgp::Event& ev) {
     case EventType::WsBinary: app.on_transport_binary(ev.data, ev.len); break;
     case EventType::WsClosed: app.on_transport_closed(text ? text : "closed"); break;
     case EventType::Mic:
+#if CONFIG_HG_WAKEWORD_SPIKE
+      hgp::wake_spike::feed(reinterpret_cast<const int16_t*>(ev.data), ev.len / sizeof(int16_t),
+                            hgp::CodecAudio::kRate);
+#endif
       app.on_mic_samples(reinterpret_cast<const int16_t*>(ev.data), ev.len / sizeof(int16_t));
       break;
-    case EventType::Console:
-      ev.console->answer(app.console(std::string_view(text ? text : "", ev.len)));
+    case EventType::Console: {
+      const std::string_view line(text ? text : "", ev.len);
+#if CONFIG_HG_WAKEWORD_SPIKE
+      if (line == "wake" || line.substr(0, 5) == "wake ") {
+        ev.console->answer(hgp::wake_spike::start(g_codec_mic, line));
+        break;
+      }
+#endif
+      ev.console->answer(app.console(line));
       break;
+    }
     case EventType::Touch:
       if (g_gestures && ev.len == sizeof(hgp::TouchSample)) {
         const auto* t = reinterpret_cast<const hgp::TouchSample*>(ev.data);
@@ -629,6 +644,10 @@ extern "C" void app_main(void) {
 #endif
     if (g_gestures) g_gestures->tick(g_system.now_ms());
     app.tick();
+#if CONFIG_HG_WAKEWORD_SPIKE
+    if (hgp::wake_spike::tick(app.in_turn()) && !app.wake_word_listen())
+      std::printf("@wake ignored: the device can't record now\n");
+#endif
 #if !CONFIG_HG_BOARD_ESP32_CYD
     // The motion task keeps the latest sample; poll it about every 100 ms instead
     // of letting 10 Hz events fill the queue. Only new reads go to the app, so a

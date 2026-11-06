@@ -817,6 +817,10 @@ BoardConfig make() {
   // (RMS about -53 dBFS) over a -78 dBFS floor, so a loopback was inaudible.
   // 42 dB is the ES8311's top ADC scale step.
   b.codec.mic_gain_db = 42.0f;
+  // Hands-free speech floor. Speech a little away from the board measures about
+  // -45 dBFS RMS (~180) over a -78 dBFS floor, under the default 500, so the VAD
+  // never heard speech and gave up after 6 s.
+  b.codec.vad_min_rms = 150.0f;
   b.touch.enabled = true;
   b.touch.controller = TouchController::Ft5x06;
   b.touch.addr = 0x38;

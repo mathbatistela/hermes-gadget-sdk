@@ -1623,6 +1623,13 @@ void App::on_button(Button button, bool pressed, bool touch) {
   update_model();
 }
 
+bool App::wake_word_listen() {
+  if (mode_ != Mode::Idle || !can_talk() || prompt_showing() || menu_ != Menu::Closed) return false;
+  start_listening(true);
+  update_model();
+  return mode_ == Mode::Listening;
+}
+
 void App::start_listening(bool hands_free) {
   stop_playback();
   dismiss_overlay();
