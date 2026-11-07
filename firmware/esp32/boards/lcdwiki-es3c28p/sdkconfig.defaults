@@ -21,3 +21,8 @@ CONFIG_LWIP_TCP_WND_DEFAULT=32768
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
 CONFIG_LWIP_TCP_RECVMBOX_SIZE=32
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+# Panels drawn with LVGL (docs/protocol.md#panels), and the 4 MB app slots they need.
+# Moving to this table from partitions.csv takes one USB flash; settings stay.
+CONFIG_HG_PANEL=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions-16mb.csv"

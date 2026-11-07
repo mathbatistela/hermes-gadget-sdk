@@ -196,6 +196,7 @@ const App::Route App::kRoutes[] = {
     {"face.start", &App::h_face_start},   {"face.end", &App::h_face_end},
     {"face.thumb", &App::h_face_thumb},   {"face.thumb.start", &App::h_face_thumb_start},
     {"face.thumb.end", &App::h_face_thumb_end},
+    {"panel", &App::h_panel},             {"panel.close", &App::h_panel_close},
 };
 
 App::App(Hal& hal, DeviceProfile profile) : hal_(hal), profile_(std::move(profile)) {}
@@ -657,6 +658,13 @@ void App::send_hello() {
     json::Value dash = json::Value::object();
     dash.set("v", kDashboardVersion).set("rows", ui_->dash_rows());
     caps.set("dashboard", dash);
+  }
+  if (panels_offered()) {
+    // The area a panel gets: between the bars (docs/protocol.md#panels).
+    const panel::Area a = panel_area();
+    json::Value p = json::Value::object();
+    p.set("v", panel::kVersion).set("width", a.width).set("height", a.height).set("charset", "latin1");
+    caps.set("panel", p);
   }
   caps.set("profiles", true);
   if (ui_ && profile_.faces) {
@@ -2026,6 +2034,11 @@ bool App::turn_page() {
 
 void App::dismiss_overlay() {
   if (overlay_ == Overlay::None) return;
+  if (overlay_ == Overlay::Panel && panel_view_) {
+    panel_view_->hide();
+    panel_spec_ = panel::Spec();
+    panel_drawn_ = false;
+  }
   overlay_ = Overlay::None;
   image_stream_ = -1;
   if (ui_) ui_->invalidate();
@@ -2426,6 +2439,7 @@ void App::tick() {
     ++model_.frame;
     update_model();
   }
+  panel_tick();  // after the bars: LVGL draws what changed between them
 }
 
 void App::update_model() {
@@ -2667,6 +2681,10 @@ void App::update_model() {
     m.screen = Screen::Image;
     m.headline = tr(Msg::Image);
     m.hint = tr(Msg::ButtonToClose, {cancel});
+  } else if (overlay_ == Overlay::Panel) {
+    m.screen = Screen::Panel;
+    m.headline = panel_spec_.title;
+    m.hint = profile_.touch_screen && touch_talk_ ? std::string(tr(Msg::HoldScreenToTalk)) : tr(Msg::ButtonToClose, {cancel});
   } else if (overlay_ == Overlay::Profiles) {
     m.screen = Screen::Profiles;
     m.headline = tr(Msg::ProfileListTitle);
@@ -2921,9 +2939,10 @@ std::string App::console(std::string_view raw) {
       for (const char* k : kTailnetKeys) keys += std::string(" ") + k;
     return "@help commands: status | diag [log] | get <key> | set <key> <value> | say <text> | talk | release | "
            "cancel | new-session | camera [close] | settings [close] | wifi-setup [close] | wifi [list | add <ssid> [password] | join <ssid> | "
-           "forget <ssid>] | phone [pair [close] | forget] | perf [on | off | reset | budget <us> | bench [scroll | mascot | redraw | all]] | yes | no | reconnect | forget-key | factory-reset   keys:" + keys;
+           "forget <ssid>] | phone [pair [close] | forget] | panel [demo | close | <json>] | perf [on | off | reset | budget <us> | bench [scroll | mascot | redraw | all]] | yes | no | reconnect | forget-key | factory-reset   keys:" + keys;
   }
   if (cmd == "status") return "@status " + status_json();
+  if (cmd == "panel") return panel_command(rest);
   if (cmd == "phone") {
     if (!on_phone_pair) return "@error Bluetooth is not enabled on this board";
     if (rest.empty()) return "@phone " + phone_value().dump();

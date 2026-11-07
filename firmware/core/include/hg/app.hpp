@@ -20,6 +20,7 @@
 #include "hg/hal.hpp"
 #include "hg/i18n.hpp"
 #include "hg/json.hpp"
+#include "hg/panel.hpp"
 #include "hg/recording.hpp"
 #include "hg/tones.hpp"
 #include "hg/ui.hpp"
@@ -92,6 +93,11 @@ struct DeviceProfile {
   // whole of it is sent again once the device is back online. Without it, or when it returns
   // null, audio streams straight to the link and a lost connection ends the recording.
   void* (*recording_alloc)(size_t) = nullptr;
+  // Panels (docs/protocol.md#panels): the LVGL view's draw buffer, 40 rows of the screen's width
+  // (19 KB at 240 px), taken from this the first time a panel shows and kept. Without it, malloc.
+  // Panels need a firmware built with HG_PANEL, a touchscreen and a framebuffer that holds the
+  // whole screen; other boards don't offer them.
+  void* (*panel_alloc)(size_t) = nullptr;
 };
 
 // A device-side capability the agent may invoke. `params` is a JSON-schema
@@ -210,6 +216,15 @@ class App {
   int profile_per_page() const;
   // A tap or a scroll while a spoken reply's latest lines caption the talking face shows its whole text.
   bool show_reply_text();
+  // A panel from Hermes is on screen. Touches between the bars go to it (TouchGestures): a
+  // drag scrolls it, a tap presses what is under the finger.
+  bool panel_showing() const { return model_.screen == Screen::Panel; }
+  bool panel_hit(int x, int y) const;
+  // A touch on the panel, in panel coordinates; `pressed` false when the finger lifts.
+  void panel_touch(bool pressed, int x, int y);
+  // Whether this device offers panels in its hello (caps.panel), and where they draw.
+  bool panels_offered() const;
+  panel::Area panel_area() const;
   bool profile_picker_open() const { return overlay_ == Overlay::Profiles; }
   bool profile_switch_pending() const { return !profile_pending_.empty(); }
   static constexpr uint32_t kProfileReplyMs = 15000;
@@ -364,6 +379,12 @@ class App {
   void h_prompt(const json::Value& m);
   void h_prompt_close(const json::Value& m);
   void h_dashboard(const json::Value& m);
+  void h_panel(const json::Value& m);
+  void h_panel_close(const json::Value& m);
+  bool show_panel(panel::Spec spec);
+  void close_panel();
+  void panel_tick();
+  std::string panel_command(std::string_view args);
   void h_ota_offer(const json::Value& m);
   void h_ota_begin(const json::Value& m);
   void h_ota_end(const json::Value& m);
@@ -793,7 +814,7 @@ class App {
   uint32_t id_counter_ = 0;
 
   // overlays
-  enum class Overlay : uint8_t { None, Card, Image, Dashboard, Profiles };
+  enum class Overlay : uint8_t { None, Card, Image, Dashboard, Profiles, Panel };
   Overlay overlay_ = Overlay::None;
   uint32_t overlay_until_ = 0;  // 0 = until dismissed
   std::string card_title_, card_body_;
@@ -801,6 +822,13 @@ class App {
   int image_stream_ = -1;
   int image_w_ = 0, image_h_ = 0, image_x_ = 0, image_y_ = 0;
   size_t image_px_ = 0;
+  // The panel: its view (made the first time one shows), the spec on screen, and whether the
+  // view has drawn since something else drew over the area.
+  std::unique_ptr<panel::View> panel_view_;
+  panel::Spec panel_spec_;
+  bool panel_drawn_ = false;
+  bool panel_failed_ = false;  // no memory for the view: panels are refused from now on
+  bool panel_talk_ = false;    // a hold on the panel pressed TALK; the lift releases it
 
   // the dashboard: Hermes's sessions and the user's tiles, as last sent. Opened
   // from the idle screen with CANCEL (a swipe down on touch boards).

@@ -68,3 +68,8 @@ dependencies:
     version: "2.5.0"
     rules:
       - if: target in [esp32p4]
+  # Panels (Kconfig HG_PANEL, docs/protocol.md#panels). firmware/core/lvgl/lv_conf.h configures it.
+  lvgl/lvgl:
+    version: "9.3.0"
+    rules:
+      - if: "$CONFIG{HG_PANEL} == True"

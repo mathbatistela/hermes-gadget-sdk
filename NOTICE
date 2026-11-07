@@ -68,6 +68,24 @@ FONTS) and Galmuri (OFL 1.1, (c) 2019-2025 Lee Minseo). The licenses are in
 LICENSES/Fusion-Pixel-OFL.txt, LICENSES/Ark-Pixel-OFL.txt,
 LICENSES/Cubic-11-License.txt and LICENSES/Galmuri-OFL.txt.
 
+LVGL 9.3.0 (https://github.com/lvgl/lvgl, MIT License, Copyright (c) 2025 LVGL
+Kft) draws panels. It is not included in this repository: the host build
+downloads it, and the ESP32 build fetches it as the lvgl/lvgl component, when
+panels are built in (HG_PANEL). firmware/core/lvgl/lv_conf.h is this project's own
+configuration for it.
+
+The glyph bitmaps in firmware/core/src/panel_fonts/hg_font_12.c, hg_font_14.c,
+hg_font_18.c and hg_font_26.c are generated with lv_font_conv 1.5.3 from
+Montserrat Medium (SIL Open Font License 1.1, Copyright 2011 The Montserrat
+Project Authors, https://github.com/JulietaUla/Montserrat) and, for four icons
+(U+F00D, U+F00C, U+F054 and U+F071), from Font Awesome 5 Free (SIL Open Font
+License 1.1, Copyright (c) 2022 Fonticons, Inc., https://fontawesome.com, with
+Reserved Font Name "Font Awesome"). Both fonts come from the font files LVGL 9.3.0
+ships in scripts/built_in_font. The generated files hold glyph shapes only, are
+not distributed under the name of either font, and stay under the font licenses
+and not under the MIT License. The licenses are in LICENSES/Montserrat-OFL.txt and
+LICENSES/FontAwesome-Free-LICENSE.txt.
+
 The CO5300 panel start-up commands in firmware/esp32/main/port_amoled.cpp (the
 register values and their order) follow Waveshare's board support package for
 the ESP32-S3-Touch-AMOLED-1.75,

@@ -9301,3 +9301,170 @@ TEST("camera: a card Hermes sends waits until the mode leaves, and what asks to 
   CHECK(!r.app.camera_open());  // a question takes the screen, as it takes it from settings
   CHECK(r.app.screen() == hg::Screen::Prompt);
 }
+
+// --------------------------------------------------------------------------
+// Panels (docs/protocol.md#panels)
+
+namespace {
+
+const char* const kButtonPanel =
+    R"({"type":"panel","id":"p1","title":"Homelab","items":[{"type":"buttons","id":"act",)"
+    R"("items":[{"id":"restart","label":"Restart"}]},{"type":"text","text":"All good"}]})";
+
+// The middle of the first item's first button, and of the close button, in panel coordinates.
+struct PanelSpots {
+  int button_x, button_y, close_x, close_y;
+};
+PanelSpots panel_spots(const hg::App& app) {
+  const hg::panel::Area a = app.panel_area();
+  return {a.x + a.width / 2, a.y + 32 + 8 + 20, a.x + a.width - 20, a.y + 16};
+}
+
+void touch_tap(Rig& r, hg::TouchGestures& touch, int x, int y) {
+  touch.update(true, x, y, r.fake.clock);
+  r.advance(60);
+  touch.update(false, 0, 0, r.fake.clock);
+  r.advance(60);
+}
+
+}  // namespace
+
+TEST("panel: a touchscreen offers panels in its hello with the area they get; buttons don't") {
+  if (!hg::panel::available()) return;
+  Rig t(Rig::touch_profile());
+  t.bring_online(true);
+  const Value* hello = t.fake.last("hello");
+  CHECK(hello != nullptr);
+  const Value& caps = (*hello)["caps"]["panel"];
+  CHECK_EQ(caps["v"].as_int(), 1);
+  const hg::panel::Area a = t.app.panel_area();
+  CHECK_EQ(caps["width"].as_int(), a.width);
+  CHECK_EQ(caps["height"].as_int(), a.height);
+  CHECK(a.width == 320 && a.height > 150 && a.y > 0);
+
+  Rig b;
+  b.bring_online(true);
+  CHECK(b.fake.last("hello") && !(*b.fake.last("hello"))["caps"].has("panel"));
+  b.server(kButtonPanel);
+  CHECK(b.app.screen() != hg::Screen::Panel);  // refused: this board draws none
+}
+
+TEST("panel: a panel takes the area between the bars and a tap on a button reaches the agent") {
+  if (!hg::panel::available()) return;
+  Rig r(Rig::touch_profile());
+  r.fake.keep_panel = true;
+  r.bring_online(true);
+  hg::TouchGestures touch(r.app);
+  r.server(kButtonPanel);
+  r.advance(100);
+  CHECK(r.app.screen() == hg::Screen::Panel);
+  CHECK(r.app.panel_showing());
+  // LVGL drew the area: the button's fill is there, unlike the plain background.
+  const auto spot = panel_spots(r.app);
+  const uint16_t bg = r.fake.panel[static_cast<size_t>((r.app.panel_area().y + 60) * 320 + 2)];
+  CHECK(r.fake.panel[static_cast<size_t>(spot.button_y * 320 + spot.button_x - 60)] != bg);
+
+  touch_tap(r, touch, spot.button_x, spot.button_y);
+  const Value* ev = r.fake.last("event");
+  CHECK(ev != nullptr);
+  if (ev) {
+    CHECK_EQ((*ev)["name"].as_string(), std::string("panel.tap"));
+    CHECK((*ev)["notify"].as_bool());
+    CHECK_EQ((*ev)["data"]["panel"].as_string(), std::string("p1"));
+    CHECK_EQ((*ev)["data"]["item"].as_string(), std::string("act"));
+    CHECK_EQ((*ev)["data"]["value"].as_string(), std::string("restart"));
+    CHECK_EQ((*ev)["data"]["label"].as_string(), std::string("Restart"));
+  }
+  CHECK(r.app.screen() == hg::Screen::Panel);  // the panel stays
+  CHECK(!r.fake.mic_on);                      // and the tap recorded nothing
+
+  // A drag is not a tap.
+  const size_t events = r.fake.sent.size();
+  touch.update(true, spot.button_x, spot.button_y, r.fake.clock);
+  for (int dy = 0; dy < 80; dy += 8) {
+    r.advance(16);
+    touch.update(true, spot.button_x, spot.button_y + dy, r.fake.clock);
+  }
+  touch.update(false, 0, 0, r.fake.clock);
+  r.advance(100);
+  bool tapped = false;
+  for (size_t i = events; i < r.fake.sent.size(); ++i) tapped |= r.fake.sent[i]["type"].as_string() == "event";
+  CHECK(!tapped);
+}
+
+TEST("panel: the close button, CANCEL and panel.close close it; another id replaces it") {
+  if (!hg::panel::available()) return;
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  hg::TouchGestures touch(r.app);
+  r.server(kButtonPanel);
+  r.advance(100);
+  const auto spot = panel_spots(r.app);
+  touch_tap(r, touch, spot.close_x, spot.close_y);
+  CHECK(r.app.screen() == hg::Screen::Ready);
+
+  r.server(kButtonPanel);
+  r.advance(100);
+  r.app.on_button(hg::Button::Cancel, true);
+  r.app.on_button(hg::Button::Cancel, false);
+  CHECK(r.app.screen() == hg::Screen::Ready);
+
+  r.server(kButtonPanel);
+  r.server(R"({"type":"panel.close","id":"other"})");
+  CHECK(r.app.screen() == hg::Screen::Panel);  // another panel's close leaves this one
+  r.server(R"({"type":"panel.close","id":"p1"})");
+  CHECK(r.app.screen() == hg::Screen::Ready);
+
+  r.server(kButtonPanel);
+  r.server(R"({"type":"display","title":"Note","body":"hi"})");
+  r.advance(50);
+  CHECK(r.app.screen() == hg::Screen::Card);  // a card replaces it
+  CHECK(r.app.console("panel").rfind(R"(@panel {"showing":false,"area":[0,)", 0) == 0);
+}
+
+TEST("panel: a question over a panel answers, then the panel is drawn again; ttl_s ends it") {
+  if (!hg::panel::available()) return;
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  r.server(kButtonPanel);
+  r.advance(100);
+  r.server(R"({"type":"prompt","id":"q1","title":"Restart?","text":"diun"})");
+  CHECK(r.app.screen() == hg::Screen::Prompt);
+  r.advance(700);
+  const int before = r.fake.flushed_rows;
+  r.app.on_button(hg::Button::Talk, true);
+  r.app.on_button(hg::Button::Talk, false);
+  CHECK(r.fake.last("prompt.reply") != nullptr);
+  r.advance(50);
+  CHECK(r.app.screen() == hg::Screen::Panel);
+  CHECK(r.fake.flushed_rows - before >= r.app.panel_area().height);  // all of it, not what changed
+
+  r.server(R"({"type":"panel","id":"p2","ttl_s":2,"items":[{"type":"text","text":"brief"}]})");
+  r.advance(1000);
+  CHECK(r.app.screen() == hg::Screen::Panel);
+  r.advance(1200);
+  CHECK(r.app.screen() == hg::Screen::Ready);
+}
+
+TEST("panel: holding the panel talks; the console shows the demo") {
+  if (!hg::panel::available()) return;
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  hg::TouchGestures touch(r.app);
+  CHECK(r.app.console("panel demo") == "@ok panel demo");
+  r.advance(100);
+  CHECK(r.app.screen() == hg::Screen::Panel);
+  CHECK(r.app.console("panel").rfind(R"(@panel {"showing":true,"id":"demo","items":6,"area":[0,)", 0) == 0);
+  // A still finger on the arc, which nothing taps: TALK after LVGL's long press.
+  const hg::panel::Area a = r.app.panel_area();
+  touch.update(true, a.x + 20, a.y + 60, r.fake.clock);
+  for (int i = 0; i < 60; ++i) {
+    r.advance(10);
+    touch.update(true, a.x + 20, a.y + 60, r.fake.clock);
+  }
+  CHECK(r.app.screen() == hg::Screen::Listening);
+  touch.update(false, 0, 0, r.fake.clock);
+  r.advance(20);
+  CHECK(r.app.screen() != hg::Screen::Listening);
+  CHECK(r.app.console("panel close") == "@ok panel closed");
+}

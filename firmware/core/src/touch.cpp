@@ -55,6 +55,7 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
         break;
       case State::Talk: release(Button::Talk); break;
       case State::Swipe: release(Button::Cancel); break;
+      case State::Panel: app_.panel_touch(false, x0_, y0_); break;
       default: break;
     }
     state_ = State::Idle;
@@ -73,8 +74,10 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
               : !from_clock_ && app_.settings_title_hit(x, y) ? State::Settings
               : app_.settings_list_live() ? State::List
               : app_.camera_tap_live() ? State::Camera
+              : app_.panel_hit(x, y) ? State::Panel
               : State::Pending;
     if (state_ == State::List) app_.settings_press(x, y);
+    if (state_ == State::Panel) app_.panel_touch(true, x, y);
     on_name_ = !from_clock_ && state_ == State::Pending && app_.profile_name_hit(x, y);
     x0_ = x;
     y0_ = y;
@@ -116,6 +119,7 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
         state_ = State::Ignored;
       }
       break;
+    case State::Panel: app_.panel_touch(true, x, y); break;  // LVGL tells a drag from a tap
     case State::Side:
       dx_ = dx, dy_ = dy;
       break;

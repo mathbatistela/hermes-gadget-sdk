@@ -70,6 +70,17 @@ menu "Hermes Gadget"
         default 10
         range 0 3600
 
+    config HG_PANEL
+        bool "Panels: interactive screens from Hermes, drawn with LVGL"
+        default n
+        help
+            Builds LVGL 9.3 in so the device draws panels (docs/protocol.md#panels):
+            a title over stat tiles, progress arcs, bars, charts, lists and buttons
+            that Hermes sends as JSON, with taps going back to the agent. Offered
+            on touchscreens whose framebuffer holds the whole screen. Costs about
+            210 KB of flash and, once a panel shows, 19 KB of internal RAM per
+            240 px of screen width.
+
     choice HG_BOARD
         prompt "Board"
         default HG_BOARD_ESP32S3_BREADBOARD

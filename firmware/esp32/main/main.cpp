@@ -567,6 +567,11 @@ extern "C" void app_main(void) {
   profile.frame_budget_us = CONFIG_HG_FRAME_BUDGET_US;
   profile.frame_log_ms = CONFIG_HG_FRAME_LOG_S * 1000u;
   profile.default_name = CONFIG_HG_DEFAULT_NAME;
+#if CONFIG_HG_PANEL
+  // Panels: LVGL's draw buffer (40 rows) in internal RAM, where drawing is fastest; the
+  // objects themselves go to malloc, so PSRAM.
+  profile.panel_alloc = [](size_t n) { return heap_caps_malloc(n, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); };
+#endif
 #if CONFIG_SPIRAM
   profile.faces = esp_psram_is_initialized();
   // From PSRAM only, after the framebuffer: without room there, one-colour faces.

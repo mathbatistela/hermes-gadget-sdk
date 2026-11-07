@@ -55,6 +55,19 @@ if ping -c1 -W2 nas.lan >/dev/null; then hermes gadget tile set nas up --state o
 
 The device gets a new dashboard only when something on it changes. While the screen is dark, it gets the latest one when the screen lights up. To turn the dashboard off, set `dashboard: false` under `platforms.gadget.extra` ([configuration](hermes-integration.md#configuration)). Boards without a CANCEL button or a touchscreen don't show it.
 
+## Panels
+
+On a touchscreen that draws [panels](protocol.md#panels), Hermes can show an interactive screen between the top bar and the hint bar: a budget, the state of your homelab, a list to choose from. Ask for one, for example "show my November budget as a panel". The agent uses `gadget_panel`. Ask the agent what a device draws with `gadget_devices`: an entry with a `panel` has a panel area.
+
+- **Scroll** by dragging. A long panel scrolls slowly on the LCDWIKI ES3C28P.
+- **Tap an entry** to answer. A button, a list row or a bar that Hermes made tappable sends your tap to the agent, which reads it as a message, and the screen says "Sent to Hermes". An entry with a detail shows it in a strip at the bottom for 8 seconds instead; tap it to hide it. Nothing is sent then.
+- **Close it** with the x in the title bar, with CANCEL, or by swiping down from the bars. A card, an image or the panel's own timer closes it too.
+- **Talk** by holding a finger still on the panel, away from anything you can tap, when touch talk is on. A question, a recording or the timer alarm take the screen over, and the panel comes back afterwards.
+- **Updates.** When Hermes sends the same panel again, it changes in place and keeps its scroll position.
+- While the screen is dark the panel waits and appears when it lights up ([screen sleep](protocol.md#screen-sleep)).
+
+To try a panel without Hermes, run `panel demo` on the [console](development.md#try-a-panel); `panel close` closes it. Panels have been tested in the simulator and in host tests only; they have not been run on a board yet. Firmware for the LCDWIKI ES3C28P builds them in; other boards need `CONFIG_HG_PANEL` and a screen with a full framebuffer.
+
 ## Round screens
 
 On a round display, a thin ring just inside the glass edge shows what the device is doing. It is always on; there is no setting for it. Rectangular screens do not change. The first state that matches wins:

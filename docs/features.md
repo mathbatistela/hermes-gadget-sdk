@@ -31,6 +31,7 @@ The screenshots come from the desktop simulator, which runs the same device core
 
 - **Status screens.** Ready, Listening, Thinking and Speaking each show the face and a short line about what is happening. [The mascot](architecture.md#the-mascot)
 - **Round-screen ring.** On round displays, a ring at the edge shows recording time, a firmware update, a running timer, thinking and speaking. [Round screens](using-gadget.md#round-screens)
+- **Panels.** On touchscreens with LVGL built in, Hermes can draw an interactive screen: stat tiles, progress, bars, charts, lists and buttons. A tap on an entry goes back to Hermes. Simulator and host tests only; not yet run on a board. [Panels](using-gadget.md#panels)
 - **Resting clock.** After a chosen rest on Ready, the screen shows the time and date with the face. On round screens, the ring's marks and seconds dot turn a little each minute with the face, to spare the panel. Off by default. [Resting clock](using-gadget.md#resting-clock)
 - **A face for each Hermes profile.** The device shows the face of the profile that answers it: a `gadget-face.bin`, or the profile's Hermes avatar. [Faces](faces.md#a-face-for-each-hermes-profile)
 - **Colour faces that blink and talk.** On boards with PSRAM, an avatar shows in colour, and two extra pictures make it blink and move its mouth. [Faces](faces.md#a-face-for-each-hermes-profile)

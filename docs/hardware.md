@@ -335,6 +335,8 @@ pio run -e lcdwiki-es3c28p -t upload -t monitor
 
 The USB-C port handles flashing and the serial console. Hold BOOT, press and release RESET, then release BOOT to force download mode. For ESP-IDF, use `SDKCONFIG_DEFAULTS="sdkconfig.defaults;boards/lcdwiki-es3c28p/sdkconfig.defaults"` with a separate build directory and sdkconfig. Phone setup, pairing and OTA use the same flows as the other ESP32 boards.
 
+This profile builds [panels](protocol.md#panels) in (`CONFIG_HG_PANEL`), which makes the app larger than the default slots (about 2 MB) hold. It uses `firmware/esp32/partitions-16mb.csv` instead: two 4 MB app slots, with `nvs`, `otadata` and `phy_init` at the same offsets as the default table, so Wi-Fi, server and key settings survive. Changing the partition table needs one USB flash; an update over the air cannot do it. The measured app is 1782 KB. Panels are tested in the simulator and in host tests only; they have not been run on this board.
+
 Back up the factory image before the first flash:
 
 ```bash

@@ -236,6 +236,7 @@ namespace hg::i18n {
   X(AnsweredYes,            "Answered: yes") \
   X(AnsweredNo,             "Answered: no") \
   X(Image,                  "Image") \
+  X(PanelSent,              "Sent to Hermes") \
   /* Ready screen */ \
   X(Ready,                  "Ready") \
   X(HiImHermes,             "Hi, I'm Hermes") \
