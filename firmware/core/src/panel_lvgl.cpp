@@ -126,6 +126,7 @@ class LvglView final : public View {
     lv_display_set_color_format(disp_, LV_COLOR_FORMAT_RGB565);
     lv_display_set_buffers(disp_, buf_, nullptr, buf_bytes(cfg_), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(disp_, &LvglView::flush_cb);
+    lv_display_add_event_cb(disp_, &LvglView::render_ready_cb, LV_EVENT_RENDER_READY, this);
 
     indev_ = lv_indev_create();
     lv_indev_set_type(indev_, LV_INDEV_TYPE_POINTER);
@@ -177,6 +178,8 @@ class LvglView final : public View {
 
   void invalidate() override { lv_obj_invalidate(screen_); }
 
+  Stats stats() const override { return stats_; }
+
   void touch(bool pressed, int x, int y, uint32_t now_ms) override {
     g_tick = now_ms;
     pressed_ = pressed;
@@ -201,7 +204,12 @@ class LvglView final : public View {
     if (self->cfg_.swap_bytes) lv_draw_sw_rgb565_swap(px, static_cast<uint32_t>(w) * h);
     if (self->cfg_.blit)
       self->cfg_.blit(self->cfg_.area.x + a->x1, self->cfg_.area.y + a->y1, w, h, reinterpret_cast<const uint16_t*>(px));
+    self->stats_.rows += static_cast<uint64_t>(h);
     lv_display_flush_ready(disp);
+  }
+
+  static void render_ready_cb(lv_event_t* e) {
+    ++static_cast<LvglView*>(lv_event_get_user_data(e))->stats_.frames;
   }
 
   static void read_cb(lv_indev_t* indev, lv_indev_data_t* data) {
@@ -570,6 +578,7 @@ class LvglView final : public View {
   std::vector<std::unique_ptr<Target>> targets_;
   bool pressed_ = false;
   int x_ = 0, y_ = 0;
+  Stats stats_;
 };
 
 }  // namespace

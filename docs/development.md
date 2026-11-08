@@ -146,6 +146,7 @@ On a touchscreen profile, such as `sim-240x320`, or on a board, the `panel` comm
 |---|---|
 | `panel` | `@panel` JSON: whether panels are built in and offered, the panel on screen, and `area` (`[x, y, width, height]`, where touches land) |
 | `panel demo` | Shows a built-in budget panel |
+| `panel test` | On-device check: shows the demo, scrolls it with six scripted drags through the touch path, then taps its close button. About 12 s; logs `@panel_test {...}` with `fps`, `draw_ms_per_frame` (LVGL drawing plus the flush), `draw_ms_max`, `rows_per_frame` and `closed_by_tap`, and `panel` shows it as `test`. On the LCDWIKI ES3C28P at 20 MHz SPI: 7.9 fps, 93 ms a frame, 250 rows a frame, closed by the tap |
 | `panel close` | Closes the panel |
 | `panel <json>` | Shows the `panel` message you give it, for example `panel {"id":"t","title":"Test","items":[{"type":"text","text":"Hi"}]}`. Simulator only: the ESP32's serial console strips quotes and cuts lines at 256 characters, so on a board use `panel demo` |
 

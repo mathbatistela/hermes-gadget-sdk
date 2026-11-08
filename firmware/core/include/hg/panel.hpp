@@ -91,6 +91,12 @@ class View {
   virtual void invalidate() = 0;
   // A touch inside the area, in area coordinates; `pressed` false when the finger lifts.
   virtual void touch(bool pressed, int x, int y, uint32_t now_ms) = 0;
+  // What the view drew since it was made: frames LVGL finished and rows it pushed.
+  struct Stats {
+    uint32_t frames = 0;
+    uint64_t rows = 0;
+  };
+  virtual Stats stats() const = 0;
   // A tap on an entry with an id.
   std::function<void(const Tap&)> on_tap;
   // The close button.

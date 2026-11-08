@@ -829,6 +829,17 @@ class App {
   bool panel_drawn_ = false;
   bool panel_failed_ = false;  // no memory for the view: panels are refused from now on
   bool panel_talk_ = false;    // a hold on the panel pressed TALK; the lift releases it
+  // The console's `panel test`: the demo panel scrolled by scripted drags through the touch
+  // path, then closed with a tap on its close button, with the frames and drawing time.
+  struct PanelTest {
+    int step = -1;  // -1: not running
+    uint32_t step_at = 0, started = 0;
+    panel::View::Stats stats0;
+    uint64_t draw_us = 0, draw_max_us = 0;
+    uint32_t draws = 0;
+  } panel_test_;
+  json::Value panel_test_result_;
+  void panel_test_step();
 
   // the dashboard: Hermes's sessions and the user's tiles, as last sent. Opened
   // from the idle screen with CANCEL (a swipe down on touch boards).

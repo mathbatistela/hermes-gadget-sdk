@@ -9468,3 +9468,23 @@ TEST("panel: holding the panel talks; the console shows the demo") {
   CHECK(r.app.screen() != hg::Screen::Listening);
   CHECK(r.app.console("panel close") == "@ok panel closed");
 }
+
+TEST("panel: `panel test` scrolls the demo through the touch path, measures it and closes it with a tap") {
+  if (!hg::panel::available()) return;
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  CHECK(r.app.console("panel test").rfind("@ok panel test started", 0) == 0);
+  CHECK(r.app.console("panel test") == "@error a panel test is running");
+  r.advance(13000);
+  const std::string out = r.app.console("panel");
+  hg::json::Value v;
+  CHECK(hg::json::parse(out.substr(out.find(' ') + 1), v));
+  const hg::json::Value& t = v["test"];
+  CHECK(t["ok"].as_bool());
+  CHECK(t["closed_by_tap"].as_bool());
+  CHECK(t["frames"].as_int() > 20);  // it scrolled: frames all through the drags
+  CHECK(r.app.screen() == hg::Screen::Ready);
+  bool logged = false;
+  for (const auto& line : r.fake.logs) logged |= line.rfind("@panel_test {", 0) == 0;
+  CHECK(logged);
+}

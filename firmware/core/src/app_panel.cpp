@@ -130,8 +130,82 @@ bool App::show_panel(panel::Spec spec) {
   return true;
 }
 
+namespace {
+constexpr int kTestDrags = 6;            // three scrolling down the column, three back up
+constexpr uint32_t kTestDragMs = 500;    // finger moving
+constexpr uint32_t kTestSettleMs = 1200; // momentum dies down
+}  // namespace
+
+// One step of `panel test`, every tick while it runs. Steps 0..2*kTestDrags-1 alternate a drag
+// and its settling; then a tap on the close button, then the verdict.
+void App::panel_test_step() {
+  PanelTest& t = panel_test_;
+  const uint32_t now_ms = now();
+  const panel::Area a = panel_area();
+  const uint32_t in_step = now_ms - t.step_at;
+  auto next = [&] {
+    ++t.step;
+    t.step_at = now_ms;
+  };
+  if (t.step < 2 * kTestDrags) {
+    const int drag = t.step / 2;
+    const bool down = drag < kTestDrags / 2;  // the finger moves up: the column scrolls down
+    const int y_from = down ? a.y + a.height - 40 : a.y + 60, y_to = down ? a.y + 60 : a.y + a.height - 40;
+    if (t.step % 2 == 0) {
+      const uint32_t ms = std::min(in_step, kTestDragMs);
+      const int y = y_from + static_cast<int>((static_cast<int64_t>(y_to - y_from) * ms) / kTestDragMs);
+      panel_touch(true, a.x + a.width / 2 - 30, y);
+      if (in_step >= kTestDragMs) {
+        panel_touch(false, a.x + a.width / 2 - 30, y);
+        next();
+      }
+    } else if (in_step >= kTestSettleMs) {
+      next();
+    }
+    return;
+  }
+  if (t.step == 2 * kTestDrags) {  // the drawing part is over: measure it, then tap the close button
+    const panel::View::Stats s = panel_view_->stats();
+    const uint32_t frames = s.frames - t.stats0.frames;
+    const double secs = (now_ms - t.started) / 1000.0;
+    json::Value r = json::Value::object();
+    r.set("seconds", secs).set("frames", frames).set("fps", secs > 0 ? frames / secs : 0.0);
+    r.set("draw_ms_per_frame", frames ? t.draw_us / 1000.0 / frames : 0.0);
+    r.set("draw_ms_max", t.draw_max_us / 1000.0);
+    r.set("rows_per_frame", frames ? static_cast<double>(s.rows - t.stats0.rows) / frames : 0.0);
+    panel_test_result_ = r;
+    panel_touch(true, a.x + a.width - 20, a.y + 16);
+    next();
+    return;
+  }
+  if (t.step == 2 * kTestDrags + 1) {
+    if (in_step >= 80) {
+      panel_touch(false, a.x + a.width - 20, a.y + 16);
+      next();
+    }
+    return;
+  }
+  if (in_step >= 400) {
+    const bool closed = overlay_ != Overlay::Panel;
+    panel_test_result_.set("closed_by_tap", closed).set("ok", closed && panel_test_result_["frames"].as_int() > 0);
+    log(LogLevel::Info, "@panel_test " + panel_test_result_.dump());
+    t.step = -1;
+    update_model();
+  }
+}
+
 void App::panel_tick() {
   if (!panel_view_) return;
+  if (panel_test_.step >= 0) {
+    if (overlay_ != Overlay::Panel && panel_test_.step <= 2 * kTestDrags) {
+      panel_test_result_ = json::Value::object();
+      panel_test_result_.set("ok", false).set("error", "the panel went away during the test");
+      log(LogLevel::Warn, "@panel_test " + panel_test_result_.dump());
+      panel_test_.step = -1;
+    } else {
+      panel_test_step();
+    }
+  }
   if (overlay_ != Overlay::Panel) {
     if (!panel_spec_.id.empty()) {  // a card or an image replaced it
       panel_view_->hide();
@@ -148,7 +222,16 @@ void App::panel_tick() {
     panel_view_->invalidate();  // the area holds what was drawn over it
     panel_drawn_ = true;
   }
+  if (panel_test_.step < 0) {
+    panel_view_->render(now());
+    return;
+  }
+  const uint64_t t0 = hal_.system->now_us();
   panel_view_->render(now());
+  const uint64_t us = hal_.system->now_us() - t0;
+  panel_test_.draw_us += us;
+  panel_test_.draw_max_us = std::max(panel_test_.draw_max_us, us);
+  ++panel_test_.draws;
 }
 
 std::string App::panel_command(std::string_view args) {
@@ -161,7 +244,28 @@ std::string App::panel_command(std::string_view args) {
     json::Value area = json::Value::array();
     area.push(a.x).push(a.y).push(a.width).push(a.height);
     r.set("area", area);
+    if (panel_test_.step >= 0) r.set("test", "running");
+    else if (!panel_test_result_.is_null()) r.set("test", panel_test_result_);
     return "@panel " + r.dump();
+  }
+  if (args == "test") {
+    if (panel_test_.step >= 0) return "@error a panel test is running";
+    json::Value msg;
+    json::parse(kDemoPanel, msg);
+    panel::Spec spec;
+    std::string error;
+    if (!panel::parse(msg, spec, error) || !show_panel(std::move(spec))) return "@error the panel could not be shown";
+    update_model();
+    if (model_.screen != Screen::Panel) {
+      dismiss_overlay();
+      return "@error the panel is not on screen (offline, or something else is)";
+    }
+    panel_test_ = PanelTest();
+    panel_test_.step = 0;
+    panel_test_.started = panel_test_.step_at = now();
+    panel_test_.stats0 = panel_view_->stats();
+    panel_test_result_ = json::Value();
+    return "@ok panel test started: about 12 s; the result is logged as @panel_test and shown by `panel`";
   }
   if (args == "close") {
     if (overlay_ == Overlay::Panel) dismiss_overlay();
