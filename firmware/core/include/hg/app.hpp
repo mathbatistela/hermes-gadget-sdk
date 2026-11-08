@@ -382,6 +382,8 @@ class App {
   void h_panel(const json::Value& m);
   void h_panel_close(const json::Value& m);
   bool show_panel(panel::Spec spec);
+  // Back to the panel shown before this one (the back arrow); false when there is none.
+  bool panel_back();
   void close_panel();
   void panel_tick();
   std::string panel_command(std::string_view args);
@@ -826,17 +828,26 @@ class App {
   // view has drawn since something else drew over the area.
   std::unique_ptr<panel::View> panel_view_;
   panel::Spec panel_spec_;
+  // The panels this one was opened over (a tap that brought a new panel), oldest first, with
+  // where each was scrolled. The back arrow returns to the last; closing forgets them all.
+  struct PanelBack {
+    panel::Spec spec;
+    int scroll = 0;
+  };
+  std::vector<PanelBack> panel_back_;
   bool panel_drawn_ = false;
   bool panel_failed_ = false;  // no memory for the view: panels are refused from now on
   bool panel_talk_ = false;    // a hold on the panel pressed TALK; the lift releases it
   // The console's `panel test`: the demo panel scrolled by scripted drags through the touch
-  // path, then closed with a tap on its close button, with the frames and drawing time.
+  // path, a panel opened over it and left with a tap on the back arrow, then closed with a tap
+  // on its close button, with the frames and drawing time.
   struct PanelTest {
     int step = -1;  // -1: not running
     uint32_t step_at = 0, started = 0;
     panel::View::Stats stats0;
     uint64_t draw_us = 0, draw_max_us = 0;
     uint32_t draws = 0;
+    int scroll = 0;  // where the demo was when the panel over it opened
   } panel_test_;
   json::Value panel_test_result_;
   void panel_test_step();

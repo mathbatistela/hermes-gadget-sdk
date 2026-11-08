@@ -41,6 +41,7 @@ constexpr uint32_t kDetailMs = 8000;
 const char* const kSymClose = "\xEF\x80\x8D";  // U+F00D, in the panel fonts
 const char* const kSymOk = "\xEF\x80\x8C";     // U+F00C
 const char* const kSymRight = "\xEF\x81\x94";  // U+F054
+const char* const kSymLeft = "\xEF\x81\x93";   // U+F053
 
 uint32_t g_tick = 0;
 uint32_t tick_cb() { return g_tick; }
@@ -167,6 +168,25 @@ class LvglView final : public View {
     hide_detail();
     lv_obj_clean(body_);
     targets_.clear();
+    set_back(false);
+  }
+
+  void set_back(bool shown) override {
+    if (shown == !lv_obj_has_flag(back_, LV_OBJ_FLAG_HIDDEN)) return;
+    if (shown) lv_obj_remove_flag(back_, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(back_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_pad_left(header_, shown ? 0 : kPad, 0);
+    lv_obj_invalidate(header_);
+  }
+
+  int scroll() const override { return lv_obj_get_scroll_y(body_); }
+
+  void scroll_to(int y) override {
+    lv_display_set_default(disp_);
+    lv_obj_update_layout(screen_);
+    const int32_t now_y = lv_obj_get_scroll_y(body_);
+    lv_obj_scroll_to_y(body_, std::clamp<int32_t>(y, 0, lv_obj_get_scroll_bottom(body_) + now_y), LV_ANIM_OFF);
+    lv_obj_invalidate(body_);
   }
 
   void render(uint32_t now_ms) override {
@@ -229,6 +249,11 @@ class LvglView final : public View {
     if (self->on_close) self->on_close();
   }
 
+  static void on_back_click(lv_event_t* e) {
+    auto* self = static_cast<LvglView*>(lv_event_get_user_data(e));
+    if (self->on_back) self->on_back();
+  }
+
   // A long press anywhere that isn't a tappable entry or the close button.
   static void on_long_press(lv_event_t* e) {
     auto* self = static_cast<LvglView*>(lv_event_get_user_data(e));
@@ -284,7 +309,7 @@ class LvglView final : public View {
     lv_obj_set_style_text_font(screen_, &hg_font_14, 0);
     lv_obj_set_flex_flow(screen_, LV_FLEX_FLOW_COLUMN);
 
-    lv_obj_t* header = box(screen_);
+    lv_obj_t* header = header_ = box(screen_);
     lv_obj_set_size(header, LV_PCT(100), kHeaderH);
     lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(header, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -292,6 +317,17 @@ class LvglView final : public View {
     lv_obj_set_style_border_side(header, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_border_width(header, 1, 0);
     lv_obj_set_style_border_color(header, kFaint, 0);
+    // The back arrow, shown when there is an earlier panel; the title then starts after it.
+    back_ = box(header);
+    lv_obj_set_size(back_, 36, kHeaderH);
+    lv_obj_add_flag(back_, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(back_, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_set_ext_click_area(back_, 6);
+    lv_obj_set_style_bg_color(back_, kFaint, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(back_, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(back_, &LvglView::on_back_click, LV_EVENT_CLICKED, this);
+    lv_obj_center(label(back_, kSymLeft, &hg_font_18, kText));
+    lv_obj_add_flag(back_, LV_OBJ_FLAG_HIDDEN);
     title_ = grow_label(header, "", &hg_font_18, kText);
 
     lv_obj_t* close = box(header);
@@ -569,6 +605,8 @@ class LvglView final : public View {
   lv_display_t* disp_ = nullptr;
   lv_indev_t* indev_ = nullptr;
   lv_obj_t* screen_ = nullptr;
+  lv_obj_t* header_ = nullptr;
+  lv_obj_t* back_ = nullptr;
   lv_obj_t* title_ = nullptr;
   lv_obj_t* body_ = nullptr;
   lv_obj_t* detail_ = nullptr;

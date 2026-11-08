@@ -9422,6 +9422,65 @@ TEST("panel: the close button, CANCEL and panel.close close it; another id repla
   CHECK(r.app.console("panel").rfind(R"(@panel {"showing":false,"area":[0,)", 0) == 0);
 }
 
+// The ids of the panels under the one on screen, as the console lists them.
+std::string panel_back_ids(hg::App& app) {
+  const std::string out = app.console("panel");
+  hg::json::Value v;
+  if (!hg::json::parse(out.substr(out.find(' ') + 1), v)) return "?";
+  return v["back"].dump();
+}
+
+TEST("panel: a panel over another has a back arrow that returns to it, scrolled where it was") {
+  if (!hg::panel::available()) return;
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  hg::TouchGestures touch(r.app);
+  CHECK(r.app.console("panel demo") == "@ok panel demo");
+  r.advance(100);
+  CHECK(panel_back_ids(r.app) == "[]");
+  r.server(kButtonPanel);  // the answer to a tap on the demo
+  r.advance(100);
+  CHECK(panel_back_ids(r.app) == R"(["demo"])");
+  r.server(kButtonPanel);  // the same panel again is an update, not another level
+  CHECK(panel_back_ids(r.app) == R"(["demo"])");
+
+  const hg::panel::Area a = r.app.panel_area();
+  touch_tap(r, touch, a.x + 18, a.y + 16);
+  CHECK(r.app.screen() == hg::Screen::Panel);
+  CHECK(r.app.console("panel").find(R"("id":"demo")") != std::string::npos);
+  CHECK(panel_back_ids(r.app) == "[]");
+  const Value* ev = r.fake.last("event");
+  CHECK(ev != nullptr);
+  if (ev) {
+    CHECK((*ev)["name"].as_string() == "panel.back");
+    CHECK(!(*ev)["notify"].as_bool());  // nothing to answer
+    CHECK((*ev)["data"]["from"].as_string() == "p1");
+  }
+  CHECK(r.app.console("panel back") == "@error no earlier panel to go back to");
+
+  // An earlier panel sent again goes back to it rather than stacking a loop.
+  r.server(kButtonPanel);
+  r.server(R"({"type":"panel","id":"p2","items":[{"type":"text","text":"two"}]})");
+  CHECK(panel_back_ids(r.app) == R"(["demo","p1"])");
+  r.server(R"({"type":"panel","id":"demo","items":[{"type":"text","text":"home"}]})");
+  CHECK(panel_back_ids(r.app) == "[]");
+
+  // At most kMaxBack levels: the oldest go.
+  for (int i = 0; i < 5; ++i)
+    r.server(R"({"type":"panel","id":"n)" + std::to_string(i) + R"(","items":[{"type":"text","text":"x"}]})");
+  CHECK(panel_back_ids(r.app) == R"(["n1","n2","n3"])");
+  r.server(R"({"type":"panel.close","id":"n2"})");  // an earlier one closed: back skips it
+  CHECK(panel_back_ids(r.app) == R"(["n1","n3"])");
+  CHECK(r.app.console("panel back") == "@ok back to n3");
+
+  // The close button forgets them all.
+  const auto spot = panel_spots(r.app);
+  touch_tap(r, touch, spot.close_x, spot.close_y);
+  CHECK(r.app.screen() == hg::Screen::Ready);
+  r.server(kButtonPanel);
+  CHECK(panel_back_ids(r.app) == "[]");
+}
+
 TEST("panel: a question over a panel answers, then the panel is drawn again; ttl_s ends it") {
   if (!hg::panel::available()) return;
   Rig r(Rig::touch_profile());
@@ -9454,7 +9513,7 @@ TEST("panel: holding the panel talks; the console shows the demo") {
   CHECK(r.app.console("panel demo") == "@ok panel demo");
   r.advance(100);
   CHECK(r.app.screen() == hg::Screen::Panel);
-  CHECK(r.app.console("panel").rfind(R"(@panel {"showing":true,"id":"demo","items":6,"area":[0,)", 0) == 0);
+  CHECK(r.app.console("panel").rfind(R"(@panel {"showing":true,"id":"demo","items":6,"back":[],"area":[0,)", 0) == 0);
   // A still finger on the arc, which nothing taps: TALK after LVGL's long press.
   const hg::panel::Area a = r.app.panel_area();
   touch.update(true, a.x + 20, a.y + 60, r.fake.clock);
@@ -9469,19 +9528,21 @@ TEST("panel: holding the panel talks; the console shows the demo") {
   CHECK(r.app.console("panel close") == "@ok panel closed");
 }
 
-TEST("panel: `panel test` scrolls the demo through the touch path, measures it and closes it with a tap") {
+TEST("panel: `panel test` scrolls the demo through the touch path, goes back from a panel over it and closes it") {
   if (!hg::panel::available()) return;
   Rig r(Rig::touch_profile());
   r.bring_online(true);
   CHECK(r.app.console("panel test").rfind("@ok panel test started", 0) == 0);
   CHECK(r.app.console("panel test") == "@error a panel test is running");
-  r.advance(13000);
+  r.advance(15000);
   const std::string out = r.app.console("panel");
   hg::json::Value v;
   CHECK(hg::json::parse(out.substr(out.find(' ') + 1), v));
   const hg::json::Value& t = v["test"];
   CHECK(t["ok"].as_bool());
   CHECK(t["closed_by_tap"].as_bool());
+  CHECK(t["back_by_tap"].as_bool());
+  CHECK(t["scroll_kept"].as_bool());
   CHECK(t["frames"].as_int() > 20);  // it scrolled: frames all through the drags
   CHECK(r.app.screen() == hg::Screen::Ready);
   bool logged = false;

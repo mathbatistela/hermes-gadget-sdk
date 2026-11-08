@@ -77,8 +77,8 @@ configuration for it.
 The glyph bitmaps in firmware/core/src/panel_fonts/hg_font_12.c, hg_font_14.c,
 hg_font_18.c and hg_font_26.c are generated with lv_font_conv 1.5.3 from
 Montserrat Medium (SIL Open Font License 1.1, Copyright 2011 The Montserrat
-Project Authors, https://github.com/JulietaUla/Montserrat) and, for four icons
-(U+F00D, U+F00C, U+F054 and U+F071), from Font Awesome 5 Free (SIL Open Font
+Project Authors, https://github.com/JulietaUla/Montserrat) and, for five icons
+(U+F00D, U+F00C, U+F053, U+F054 and U+F071), from Font Awesome 5 Free (SIL Open Font
 License 1.1, Copyright (c) 2022 Fonticons, Inc., https://fontawesome.com, with
 Reserved Font Name "Font Awesome"). Both fonts come from the font files LVGL 9.3.0
 ships in scripts/built_in_font. The generated files hold glyph shapes only, are

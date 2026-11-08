@@ -75,7 +75,8 @@ PANEL_SCHEMA = {
                    "labels: first and last shown, style line|columns); list (rows: label, text, state); buttons "
                    "(items with id + label). An entry with an id is tappable: the tap comes back to you as a "
                    "message '[Gadget panel] The user tapped ...'; one with a detail shows it on the device. Sending "
-                   "the same id again updates the panel in place. Keep labels short (the screen is ~240 px wide); "
+                   "the same id again updates the panel in place; a new id over a panel on screen (a drill-down after a tap) "
+                   "gets a back arrow to the earlier one on the device. Keep labels short (the screen is ~240 px wide); "
                    "at most 12 items, 8 entries each (lists 16). Speak the headline yourself; the panel is the detail.",
     "parameters": {
         "type": "object",

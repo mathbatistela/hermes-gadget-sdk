@@ -28,6 +28,12 @@ const char* const kDemoPanel = R"({"type":"panel","id":"demo","title":"Orçament
 {"type":"buttons","id":"acao","items":[{"id":"detalhar","label":"Detalhar","state":"primary"},
  {"id":"fechar_mes","label":"Fechar mês"}]}]})";
 
+// What `panel test` opens over the demo, as the answer to a tap on "Mercado" would be.
+const char* const kDemoDetailPanel = R"({"type":"panel","id":"demo-mercado","title":"Mercado","items":[
+{"type":"stats","items":[{"label":"Compras","value":"14"},{"label":"Maior","value":"R$ 312"}]},
+{"type":"list","id":"compra","label":"Últimas","items":[{"id":"c1","label":"Atacadão","value":"R$ 312"},
+ {"id":"c2","label":"Feira","value":"R$ 64"}]}]})";
+
 }  // namespace
 
 bool App::panels_offered() const {
@@ -69,7 +75,17 @@ void App::h_panel(const json::Value& m) {
 
 void App::h_panel_close(const json::Value& m) {
   const std::string& id = m["id"].as_string();
-  if (overlay_ == Overlay::Panel && (id.empty() || id == panel_spec_.id)) dismiss_overlay();
+  if (overlay_ != Overlay::Panel) return;
+  if (id.empty() || id == panel_spec_.id) {
+    dismiss_overlay();
+    return;
+  }
+  // An earlier panel, still under this one: the back arrow no longer returns to it.
+  const size_t before = panel_back_.size();
+  panel_back_.erase(std::remove_if(panel_back_.begin(), panel_back_.end(),
+                                   [&](const PanelBack& b) { return b.spec.id == id; }),
+                    panel_back_.end());
+  if (panel_back_.size() != before) panel_view_->set_back(!panel_back_.empty());
 }
 
 bool App::show_panel(panel::Spec spec) {
@@ -114,19 +130,52 @@ bool App::show_panel(panel::Spec spec) {
       dismiss_overlay();
       update_model();
     };
+    panel_view_->on_back = [this] { panel_back(); };
   }
   if (alarm_) dismiss_alarm();  // a panel replaces the alarm, as a card does
   close_setup_screens();
   wake_display();
   if (settings_open()) close_settings();
-  // The same panel again is an update: it keeps its place in the column.
-  const bool update = overlay_ == Overlay::Panel && spec.id == panel_spec_.id;
-  if (!update) dismiss_overlay();
+  // The same panel again is an update: it keeps its place in the column. Another panel over
+  // one on screen (the answer to a tap, usually) keeps the one under it for the back arrow.
+  const bool showing = overlay_ == Overlay::Panel;
+  const bool update = showing && spec.id == panel_spec_.id;
+  std::vector<PanelBack> back;
+  if (showing && !update) {
+    back = std::move(panel_back_);
+    const auto again = std::find_if(back.begin(), back.end(), [&](const PanelBack& b) { return b.spec.id == spec.id; });
+    if (again != back.end()) {
+      back.erase(again, back.end());  // an earlier panel sent again: back to it, not a loop
+    } else {
+      back.push_back(PanelBack{std::move(panel_spec_), panel_view_->scroll()});
+      if (back.size() > panel::kMaxBack) back.erase(back.begin());
+    }
+  }
+  if (!update) {
+    dismiss_overlay();
+    panel_back_ = std::move(back);
+  }
   panel_spec_ = std::move(spec);
   panel_view_->show(panel_spec_, update);
+  panel_view_->set_back(!panel_back_.empty());
   panel_drawn_ = false;
   overlay_ = Overlay::Panel;
   overlay_until_ = panel_spec_.ttl_ms ? now() + panel_spec_.ttl_ms : 0;
+  return true;
+}
+
+bool App::panel_back() {
+  if (overlay_ != Overlay::Panel || panel_back_.empty() || !panel_view_) return false;
+  PanelBack b = std::move(panel_back_.back());
+  panel_back_.pop_back();
+  json::Value data = json::Value::object();
+  data.set("panel", b.spec.id).set("from", panel_spec_.id);
+  panel_spec_ = std::move(b.spec);
+  panel_view_->show(panel_spec_, false);
+  panel_view_->scroll_to(b.scroll);
+  panel_view_->set_back(!panel_back_.empty());
+  overlay_until_ = 0;  // its own ttl_s ran from when it was sent; it stays until closed
+  emit_event("panel.back", std::move(data), false);  // for the logs; the agent isn't asked anything
   return true;
 }
 
@@ -134,6 +183,7 @@ namespace {
 constexpr int kTestDrags = 6;            // three scrolling down the column, three back up
 constexpr uint32_t kTestDragMs = 500;    // finger moving
 constexpr uint32_t kTestSettleMs = 1200; // momentum dies down
+constexpr int kTestScroll = 120;         // where the demo is left before the panel over it
 }  // namespace
 
 // One step of `panel test`, every tick while it runs. Steps 0..2*kTestDrags-1 alternate a drag
@@ -164,7 +214,8 @@ void App::panel_test_step() {
     }
     return;
   }
-  if (t.step == 2 * kTestDrags) {  // the drawing part is over: measure it, then tap the close button
+  constexpr int kDone = 2 * kTestDrags;  // the scrolling part is over
+  if (t.step == kDone) {  // measure it; then a panel over the demo, as a tap's answer brings one
     const panel::View::Stats s = panel_view_->stats();
     const uint32_t frames = s.frames - t.stats0.frames;
     const double secs = (now_ms - t.started) / 1000.0;
@@ -174,20 +225,54 @@ void App::panel_test_step() {
     r.set("draw_ms_max", t.draw_max_us / 1000.0);
     r.set("rows_per_frame", frames ? static_cast<double>(s.rows - t.stats0.rows) / frames : 0.0);
     panel_test_result_ = r;
-    panel_touch(true, a.x + a.width - 20, a.y + 16);
+    panel_view_->scroll_to(kTestScroll);
+    t.scroll = panel_view_->scroll();
+    json::Value msg;
+    json::parse(kDemoDetailPanel, msg);
+    panel::Spec spec;
+    std::string error;
+    if (panel::parse(msg, spec, error)) show_panel(std::move(spec));
     next();
     return;
   }
-  if (t.step == 2 * kTestDrags + 1) {
+  // Taps at the header's two ends: the back arrow, then the close button.
+  const int back_x = a.x + 18, close_x = a.x + a.width - 20, bar_y = a.y + 16;
+  if (t.step == kDone + 1) {
+    if (in_step >= 600) {
+      panel_touch(true, back_x, bar_y);
+      next();
+    }
+    return;
+  }
+  if (t.step == kDone + 2) {
     if (in_step >= 80) {
-      panel_touch(false, a.x + a.width - 20, a.y + 16);
+      panel_touch(false, back_x, bar_y);
+      next();
+    }
+    return;
+  }
+  if (t.step == kDone + 3) {
+    if (in_step >= 400) {
+      const bool back = overlay_ == Overlay::Panel && panel_spec_.id == "demo" && panel_back_.empty();
+      panel_test_result_.set("back_by_tap", back).set("scroll_kept", back && panel_view_->scroll() == t.scroll);
+      panel_touch(true, close_x, bar_y);
+      next();
+    }
+    return;
+  }
+  if (t.step == kDone + 4) {
+    if (in_step >= 80) {
+      panel_touch(false, close_x, bar_y);
       next();
     }
     return;
   }
   if (in_step >= 400) {
     const bool closed = overlay_ != Overlay::Panel;
-    panel_test_result_.set("closed_by_tap", closed).set("ok", closed && panel_test_result_["frames"].as_int() > 0);
+    panel_test_result_.set("closed_by_tap", closed);
+    panel_test_result_.set("ok", closed && panel_test_result_["back_by_tap"].as_bool(false) &&
+                                     panel_test_result_["scroll_kept"].as_bool(false) &&
+                                     panel_test_result_["frames"].as_int() > 0);
     log(LogLevel::Info, "@panel_test " + panel_test_result_.dump());
     t.step = -1;
     update_model();
@@ -197,7 +282,7 @@ void App::panel_test_step() {
 void App::panel_tick() {
   if (!panel_view_) return;
   if (panel_test_.step >= 0) {
-    if (overlay_ != Overlay::Panel && panel_test_.step <= 2 * kTestDrags) {
+    if (overlay_ != Overlay::Panel && panel_test_.step <= 2 * kTestDrags + 3) {  // before the close tap
       panel_test_result_ = json::Value::object();
       panel_test_result_.set("ok", false).set("error", "the panel went away during the test");
       log(LogLevel::Warn, "@panel_test " + panel_test_result_.dump());
@@ -239,7 +324,12 @@ std::string App::panel_command(std::string_view args) {
   if (args.empty()) {
     json::Value r = json::Value::object();
     r.set("showing", overlay_ == Overlay::Panel);
-    if (overlay_ == Overlay::Panel) r.set("id", panel_spec_.id).set("items", static_cast<int>(panel_spec_.items.size()));
+    if (overlay_ == Overlay::Panel) {
+      r.set("id", panel_spec_.id).set("items", static_cast<int>(panel_spec_.items.size()));
+      json::Value back = json::Value::array();
+      for (const PanelBack& b : panel_back_) back.push(b.spec.id);
+      r.set("back", back);
+    }
     const panel::Area a = panel_area();  // where touches land on it, for bench automation
     json::Value area = json::Value::array();
     area.push(a.x).push(a.y).push(a.width).push(a.height);
@@ -266,6 +356,11 @@ std::string App::panel_command(std::string_view args) {
     panel_test_.stats0 = panel_view_->stats();
     panel_test_result_ = json::Value();
     return "@ok panel test started: about 12 s; the result is logged as @panel_test and shown by `panel`";
+  }
+  if (args == "back") {
+    if (!panel_back()) return "@error no earlier panel to go back to";
+    update_model();
+    return "@ok back to " + panel_spec_.id;
   }
   if (args == "close") {
     if (overlay_ == Overlay::Panel) dismiss_overlay();

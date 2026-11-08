@@ -61,6 +61,7 @@ On a touchscreen that draws [panels](protocol.md#panels), Hermes can show an int
 
 - **Scroll** by dragging. A long panel scrolls slowly on the LCDWIKI ES3C28P.
 - **Tap an entry** to answer. A button, a list row or a bar that Hermes made tappable sends your tap to the agent, which reads it as a message, and the screen says "Sent to Hermes". An entry with a detail shows it in a strip at the bottom for 8 seconds instead; tap it to hide it. Nothing is sent then.
+- **Go back** with the arrow before the title. When a tap brings a new panel, the one you tapped stays underneath (up to three), and the arrow returns to it where you left it, at once, without asking Hermes.
 - **Close it** with the x in the title bar, with CANCEL, or by swiping down from the bars. A card, an image or the panel's own timer closes it too.
 - **Talk** by holding a finger still on the panel, away from anything you can tap, when touch talk is on. A question, a recording or the timer alarm take the screen over, and the panel comes back afterwards.
 - **Updates.** When Hermes sends the same panel again, it changes in place and keeps its scroll position.

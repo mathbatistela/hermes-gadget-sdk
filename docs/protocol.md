@@ -339,6 +339,7 @@ Limits. The device cuts what is over a limit and never refuses it:
 The device refuses a panel only when it has no `id` or nothing it can draw. Unknown item types and fields are skipped. Text is drawn in Montserrat at 12, 14, 18 and 26 px: Latin-1 for the first three, ASCII with a fallback for the large size. The plugin folds text to `charset` before sending.
 
 - **Update.** A panel with the `id` of the one on screen replaces it in place and keeps its scroll position. A panel with another `id` replaces it from the top.
+- **Back.** A panel with another `id` that arrives while one is on screen (usually the answer to a tap) keeps the one under it, with its scroll position, and shows a back arrow before its title. A tap on the arrow returns to the earlier panel on the device, with no round trip, and sends `{"type": "event", "name": "panel.back", "notify": false, "data": {"panel": "p1", "from": "p2"}}` for the logs. The device keeps up to 3 earlier panels and forgets the oldest. A panel whose `id` is one of them goes back to it instead of adding a level. `panel.close` with an earlier panel's `id` removes it from the list; closing the panel on screen forgets them all.
 - **Close.** `{"type": "panel.close", "id": "p1"}` closes the panel; without `id` it closes whichever is on screen. The user closes it with the **x** in its title bar, or with CANCEL or a swipe down from the bars. `ttl_s` closes it too, and so does a card or an image. A question, a recording or the timer alarm take the screen over; the panel is drawn again afterwards.
 - **Taps.** Dragging scrolls. A tap on an entry with an `id` sends a `panel.tap` event with `notify: true`, so the agent reads it as a message, and the device shows "Sent to Hermes". An entry with a `detail` shows it in a strip at the bottom for 8 s, or until a tap hides it, without asking the server; with both, it does both.
 
@@ -390,6 +391,7 @@ A device with a camera may advertise `camera.capture` in `hello.actions`; it tak
 | `{"type": "state", "display_sleeping": true}` | The screen went dark (`false`: it lit up); see [Screen sleep](#screen-sleep) |
 | `{"type": "event", "name": "button.long_press", "data": {...}, "notify": false}` | With `notify: true`, the event is delivered to the agent as a message |
 | `{"type": "event", "name": "timer.done", "data": {"label": "Pasta"}, "notify": false}` | The device's timer ran out (the label is empty when none was set). It always has `notify: false`: the alarm is the device's own, and Hermes is not interrupted. Dropped while the device is offline |
+| `{"type": "event", "name": "panel.back", "data": {"panel": "p1", "from": "p2"}, "notify": false}` | The user went back from panel `p2` to the earlier panel `p1` with the back arrow; see [Panels](#panels). Logged only |
 | `{"type": "event", "name": "panel.tap", "data": {"panel": "p1", "item": "cat", "value": "mercado", "label": "Mercado"}, "notify": true}` | The user tapped a panel entry that has an `id`; see [Panels](#panels). The plugin delivers it to the agent as a message |
 
 ### Firmware updates

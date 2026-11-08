@@ -2037,6 +2037,7 @@ void App::dismiss_overlay() {
   if (overlay_ == Overlay::Panel && panel_view_) {
     panel_view_->hide();
     panel_spec_ = panel::Spec();
+    panel_back_.clear();
     panel_drawn_ = false;
   }
   overlay_ = Overlay::None;
@@ -2939,7 +2940,7 @@ std::string App::console(std::string_view raw) {
       for (const char* k : kTailnetKeys) keys += std::string(" ") + k;
     return "@help commands: status | diag [log] | get <key> | set <key> <value> | say <text> | talk | release | "
            "cancel | new-session | camera [close] | settings [close] | wifi-setup [close] | wifi [list | add <ssid> [password] | join <ssid> | "
-           "forget <ssid>] | phone [pair [close] | forget] | panel [demo | test | close | <json>] | perf [on | off | reset | budget <us> | bench [scroll | mascot | redraw | all]] | yes | no | reconnect | forget-key | factory-reset   keys:" + keys;
+           "forget <ssid>] | phone [pair [close] | forget] | panel [demo | test | back | close | <json>] | perf [on | off | reset | budget <us> | bench [scroll | mascot | redraw | all]] | yes | no | reconnect | forget-key | factory-reset   keys:" + keys;
   }
   if (cmd == "status") return "@status " + status_json();
   if (cmd == "panel") return panel_command(rest);

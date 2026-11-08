@@ -30,6 +30,7 @@ constexpr size_t kMaxPoints = 32;       // a chart's values
 constexpr size_t kMaxText = 160;        // a label, value or text item, in bytes
 constexpr size_t kMaxDetail = 320;      // an entry's detail, in bytes
 constexpr size_t kMaxId = 48;
+constexpr size_t kMaxBack = 3;          // earlier panels the back arrow returns to
 
 enum class Tone : uint8_t { Neutral, Ok, Warn, Bad, Accent };
 
@@ -85,6 +86,11 @@ class View {
   // (an update of the same panel).
   virtual void show(const Spec& spec, bool keep_scroll) = 0;
   virtual void hide() = 0;
+  // A back arrow before the title: there is an earlier panel to go back to.
+  virtual void set_back(bool shown) = 0;
+  // How far the column is scrolled, to come back to the same place.
+  virtual int scroll() const = 0;
+  virtual void scroll_to(int y) = 0;
   // Draws what changed. `now_ms` drives LVGL's animations. Call often while it is on screen.
   virtual void render(uint32_t now_ms) = 0;
   // Everything is drawn again on the next render (something else drew over the area).
@@ -101,6 +107,8 @@ class View {
   std::function<void(const Tap&)> on_tap;
   // The close button.
   std::function<void()> on_close;
+  // The back arrow.
+  std::function<void()> on_back;
   // A finger held still on the panel, not on anything tappable: the app may talk. The lift
   // that ends it comes through touch() as usual.
   std::function<void()> on_hold;
