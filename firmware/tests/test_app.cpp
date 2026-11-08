@@ -9462,8 +9462,19 @@ TEST("panel: a panel over another has a back arrow that returns to it, scrolled 
   r.server(kButtonPanel);
   r.server(R"({"type":"panel","id":"p2","items":[{"type":"text","text":"two"}]})");
   CHECK(panel_back_ids(r.app) == R"(["demo","p1"])");
-  r.server(R"({"type":"panel","id":"demo","items":[{"type":"text","text":"home"}]})");
+  r.server(R"({"type":"panel","id":"demo","title":"Orçamento de novembro","items":[{"type":"text","text":"home"}]})");
   CHECK(panel_back_ids(r.app) == "[]");
+
+  // The same id with another title is a detail opened from it, not an update.
+  r.server(R"({"type":"panel","id":"semana","title":"Semana","items":[{"type":"text","text":"week"}]})");
+  r.server(R"({"type":"panel","id":"semana","title":"Semana","items":[{"type":"text","text":"week, new"}]})");
+  CHECK(panel_back_ids(r.app) == R"(["demo"])");  // an update: same id, same title
+  r.server(R"({"type":"panel","id":"semana","title":"Comida","items":[{"type":"text","text":"food"}]})");
+  r.server(R"({"type":"panel","id":"semana","title":"Mercado","items":[{"type":"text","text":"shop"}]})");
+  CHECK(panel_back_ids(r.app) == R"(["demo","semana","semana"])");
+  CHECK(r.app.console("panel back") == "@ok back to semana");
+  CHECK(r.app.console("panel back") == "@ok back to semana");
+  CHECK(panel_back_ids(r.app) == R"(["demo"])");
 
   // At most kMaxBack levels: the oldest go.
   for (int i = 0; i < 5; ++i)

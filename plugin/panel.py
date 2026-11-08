@@ -180,6 +180,6 @@ def tap_text(data: Any, titles: dict[str, str]) -> str:
     data = data if isinstance(data, dict) else {}
     panel_id = str(data.get("panel") or "")
     label = str(data.get("label") or data.get("value") or "")
-    title = titles.get(panel_id) or panel_id
+    title = str(data.get("title") or "") or titles.get(panel_id) or panel_id
     where = ", ".join(f"{k} {data[k]}" for k in ("panel", "item", "value") if data.get(k))
     return f'[Gadget panel] The user tapped "{label}" on the panel "{title}" ({where}).'

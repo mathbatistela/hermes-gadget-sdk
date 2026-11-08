@@ -57,3 +57,8 @@ def test_a_tap_reads_as_a_sentence_for_the_agent():
     text = panel.tap_text({"panel": "p1", "item": "cat", "value": "mercado", "label": "Mercado"}, {"p1": "Orçamento"})
     assert text == '[Gadget panel] The user tapped "Mercado" on the panel "Orçamento" (panel p1, item cat, value mercado).'
     assert panel.tap_text({"panel": "x", "value": "v"}, {}).startswith('[Gadget panel] The user tapped "v" on the panel "x"')
+
+
+def test_a_tap_names_the_title_the_device_sent_when_an_id_was_reused():
+    data = {"panel": "semana", "title": "Semana", "item": "cat", "value": "saude", "label": "Saúde"}
+    assert 'on the panel "Semana"' in panel.tap_text(data, {"semana": "Comida"})

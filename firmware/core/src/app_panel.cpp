@@ -116,6 +116,7 @@ bool App::show_panel(panel::Spec spec) {
     panel_view_->on_tap = [this](const panel::Tap& t) {
       json::Value data = json::Value::object();
       data.set("panel", t.panel);
+      if (!panel_spec_.title.empty()) data.set("title", panel_spec_.title);  // ids get reused
       if (!t.item.empty()) data.set("item", t.item);
       data.set("value", t.value);
       if (!t.label.empty()) data.set("label", t.label);
@@ -138,12 +139,14 @@ bool App::show_panel(panel::Spec spec) {
   if (settings_open()) close_settings();
   // The same panel again is an update: it keeps its place in the column. Another panel over
   // one on screen (the answer to a tap, usually) keeps the one under it for the back arrow.
+  // Agents reuse an id for the detail they open from it, so a new title makes another panel too.
   const bool showing = overlay_ == Overlay::Panel;
-  const bool update = showing && spec.id == panel_spec_.id;
+  const auto same = [&](const panel::Spec& a) { return a.id == spec.id && a.title == spec.title; };
+  const bool update = showing && same(panel_spec_);
   std::vector<PanelBack> back;
   if (showing && !update) {
     back = std::move(panel_back_);
-    const auto again = std::find_if(back.begin(), back.end(), [&](const PanelBack& b) { return b.spec.id == spec.id; });
+    const auto again = std::find_if(back.begin(), back.end(), [&](const PanelBack& b) { return same(b.spec); });
     if (again != back.end()) {
       back.erase(again, back.end());  // an earlier panel sent again: back to it, not a loop
     } else {
