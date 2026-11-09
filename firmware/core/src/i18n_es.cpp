@@ -223,6 +223,7 @@ const Entry kSpanish[] = {
     {Msg::AnsweredYes, "Respondiste: sí"},
     {Msg::AnsweredNo, "Respondiste: no"},
     {Msg::Image, "Imagen"},
+    {Msg::PanelSent, "Enviado a Hermes"},
     // Ready screen
     {Msg::Ready, "Listo"},
     {Msg::HiImHermes, "Hola, soy Hermes"},

@@ -136,6 +136,23 @@ The bench draws the same frames on every run, so compare its numbers between bui
 
 Simulator numbers measure the core on your computer, not the board's CPU or panel. Label each result as simulator or hardware, and name the board and build when you report it.
 
+### Try a panel
+
+[Panels](protocol.md#panels) are drawn with LVGL 9.3.0. The host build (`HG_PANEL`, on by default) downloads it on the first CMake configure, so that configure needs network access. `-DHG_PANEL=OFF` builds the core without panels: the device then sends no `caps.panel`. The firmware's LVGL configuration is `firmware/core/lvgl/lv_conf.h`, used by the host and the ESP32 alike, so the simulator draws what the device draws. On the ESP32, panels are the Kconfig option `CONFIG_HG_PANEL` (menuconfig: Hermes Gadget), off by default and on for the LCDWIKI ES3C28P; see [that board's partition table](hardware.md#lcdwiki-es3c28p).
+
+On a touchscreen profile, such as `sim-240x320`, or on a board, the `panel` command works on the console without Hermes:
+
+| Command | Effect |
+|---|---|
+| `panel` | `@panel` JSON: whether panels are built in and offered, the panel on screen, and `area` (`[x, y, width, height]`, where touches land) |
+| `panel demo` | Shows a built-in budget panel |
+| `panel test` | On-device check: shows the demo, scrolls it with six scripted drags through the touch path, then opens a second panel over it, taps the back arrow, and taps the close button. About 14 s; logs `@panel_test {...}` with `fps`, `draw_ms_per_frame` (LVGL drawing plus the flush), `draw_ms_max`, `rows_per_frame`, `back_by_tap`, `scroll_kept` and `closed_by_tap`, and `panel` shows it as `test`. On the LCDWIKI ES3C28P at 20 MHz SPI: 7.9 fps, 93 ms a frame, 250 rows a frame, closed by the tap |
+| `panel back` | Returns to the panel under this one, as the back arrow does |
+| `panel close` | Closes the panel |
+| `panel <json>` | Shows the `panel` message you give it, for example `panel {"id":"t","title":"Test","items":[{"type":"text","text":"Hi"}]}`. Simulator only: the ESP32's serial console strips quotes and cuts lines at 256 characters, so on a board use `panel demo` |
+
+The panel tests are `firmware/tests/test_panel.cpp` (parsing and limits), the panel tests in `firmware/tests/test_app.cpp` (the view, taps, closing and screen takeovers), `tests/test_panel_plugin.py` (the plugin's message and notes) and two tests in `tests/test_adapter_hermes.py` (the tap reaching the agent, which need a Hermes checkout).
+
 ### Translate the device text
 
 The text the device shows by itself is listed once, with its English, in `firmware/core/include/hg/i18n.hpp` (`HG_I18N_MESSAGES`). Each other language is a table in `firmware/core/src/i18n_<code>.cpp` that maps message ids to text; `i18n_es.cpp` is the example to copy. To add a language:

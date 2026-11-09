@@ -11,6 +11,8 @@
 //   in settings        a drag scrolls the list (or moves the selected row's slider,
 //                      when it starts on it), a tap changes the row under it; with a
 //                      hardware check running, a tap and a swipe down are TALK and CANCEL
+//   on a panel         touches between the bars go to the panel: a drag scrolls it, a tap
+//                      presses what is under the finger (its close button closes it)
 //   swipe down         a CANCEL press and release (discard, close, stop, "no")
 //
 // With the touch_talk setting off, holds and taps press TALK only where it doesn't
@@ -49,7 +51,7 @@ class TouchGestures {
   void tick(uint32_t now_ms);
 
  private:
-  enum class State : uint8_t { Idle, Pending, Settings, Picker, PickerDrag, Side, List, ListDrag, Camera, Talk, Swipe, Ignored };
+  enum class State : uint8_t { Idle, Pending, Settings, Picker, PickerDrag, Side, List, ListDrag, Camera, Panel, Talk, Swipe, Ignored };
   void press(Button b);
   void release(Button b);
 

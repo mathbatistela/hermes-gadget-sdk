@@ -45,6 +45,7 @@ enum class Screen : uint8_t {
   LowBattery, // the low battery alert: a red battery icon, `headline` (the percentage) large, `detail` below
   Charging,   // plugged in: the same face in green with a bolt; no bar and no headline without a level
   Charged,    // a full battery: the same face in green, full
+  Panel,      // an LVGL panel from Hermes owns the area between the bars (App, hg/panel.hpp)
 };
 
 enum class Link : uint8_t { Offline, Network, Connecting, Online };

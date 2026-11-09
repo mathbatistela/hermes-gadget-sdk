@@ -796,3 +796,57 @@ def test_a_dark_screen_gets_only_the_latest_dashboard_when_it_wakes(gadget, make
     woke = _dashboards(sim, before)
     assert len(woke) == 1
     assert {r["label"]: r["state"] for r in woke[0]["sessions"]} == {"cli 2222": "busy", "cli 1111": "idle"}
+
+
+def test_a_panel_reaches_a_touchscreen_and_its_taps_reach_the_agent(gadget, make_sim):
+    import concurrent.futures
+
+    from hermes_gadget_plugin import tools
+
+    sim = _paired_sim(gadget, make_sim, board="sim-240x320")
+    status = sim.status()
+    session = gadget.adapter.hub.sessions[status["device_id"]]
+    if not session.panel_box:
+        pytest.skip("the simulator library was built without panels (HG_PANEL=OFF)")
+    assert session.panel_box == (240, 298)
+    pool = concurrent.futures.ThreadPoolExecutor(1)
+
+    def call(fn, args):
+        fut = pool.submit(fn, args)
+        assert sim.wait_for(fut.done, timeout=15)
+        return json.loads(fut.result())
+
+    assert call(tools.gadget_devices, {})["connected"][0]["panel"] == {"width": 240, "height": 298}
+    shown = call(tools.gadget_panel, {"title": "Homelab", "id": "lab", "items": [
+        {"type": "buttons", "id": "act", "items": [{"id": "restart_diun", "label": "Reiniciar diun"}]},
+        {"type": "list", "items": [{"label": "media", "text": "85%", "state": "warn"}]},
+    ]})
+    assert shown["success"] and shown["panel"] == "lab" and shown["screen"] == "240x298"
+    assert sim.wait_screen("panel", timeout=5)
+    assert sim.last_received("panel")["title"] == "Homelab"
+
+    # The button is the first item: under the panel's 32 px title bar and 8 px of padding.
+    area = json.loads(sim.console("panel").split(" ", 1)[1])["area"]
+    x, y = area[0] + area[2] // 2, area[1] + 32 + 8 + 20
+    before = len(gadget.events)
+    sim.touch(True, x, y)
+    time.sleep(0.15)
+    sim.touch(False)
+    assert sim.wait_for(lambda: len(gadget.events) > before, timeout=5)
+    tapped = gadget.events[-1].text
+    assert tapped == ('[Gadget panel] The user tapped "Reiniciar diun" on the panel "Homelab" '
+                      '(panel lab, item act, value restart_diun).')
+
+    closed = call(tools.gadget_panel, {"close": True, "id": "lab"})
+    assert closed["success"]
+    assert sim.wait_screen("ready", timeout=5)
+    pool.shutdown()
+
+
+def test_a_board_without_panels_gets_an_explanation_instead(gadget, make_sim):
+    from hermes_gadget_plugin import tools
+
+    sim = _paired_sim(gadget, make_sim)  # sim-320x240: buttons, no touchscreen
+    out = json.loads(tools.gadget_panel({"items": [{"type": "text", "text": "x"}]}))
+    assert not out["success"] and "draws no panels" in out["error"]
+    assert sim.last_received("panel") is None

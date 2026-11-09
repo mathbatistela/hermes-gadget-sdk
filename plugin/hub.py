@@ -140,7 +140,7 @@ class _Held:
     """
     status: str | None = None
     dashboard: dict | None = None
-    view: tuple | None = None  # ("card", title, body) or ("image", width, height, rgb565)
+    view: tuple | None = None  # ("card", title, body), ("image", width, height, rgb565) or ("panel", message)
     ttl_s: float = 0
     held_at: float = 0.0
 
@@ -323,6 +323,7 @@ class DeviceSession:
         self._thumbs_dirty = False
         self._ota_inbox: asyncio.Queue | None = None  # the device's ota.* replies, while an update runs
         self._dashboard_sent: dict | None = None  # the last dashboard this connection delivered
+        self.panel_titles: dict[str, str] = {}  # panel id -> title, for the taps that come back
         self._dashboards = 0  # dashboards offered, sent or held
 
     # -- capabilities -----------------------------------------------------------
@@ -398,6 +399,22 @@ class DeviceSession:
             return None
         w, h = int(img.get("width") or 0), int(img.get("height") or 0)
         return (w, h) if w > 0 and h > 0 else None
+
+    @property
+    def panel_box(self) -> tuple[int, int] | None:
+        """The area a panel gets (``caps.panel``: width, height), or None when the device draws none."""
+        p = self.caps.get("panel")
+        if not isinstance(p, dict) or p.get("v") != 1:
+            return None
+        w, h = p.get("width"), p.get("height")
+        if not all(isinstance(n, int) and not isinstance(n, bool) and n > 0 for n in (w, h)):
+            return None
+        return w, h
+
+    @property
+    def panel_charset(self) -> str:
+        p = self.caps.get("panel")
+        return str(p.get("charset") or "latin1") if isinstance(p, dict) else "ascii"
 
     @property
     def dashboard_version(self) -> int:
@@ -648,6 +665,23 @@ class DeviceSession:
         await self.send_json(protocol.message("image.end", stream=stream))
         return True
 
+    async def show_panel(self, panel: dict) -> bool:
+        """Show a panel (a ``panel`` message, see plugin/panel.py). False when it is held until the
+        screen lights up. A panel with the id of the one on screen updates it in place."""
+        self.panel_titles[str(panel.get("id"))] = str(panel.get("title") or "")
+        if self._hold_view(("panel", panel), float(panel.get("ttl_s") or 0)):
+            return False
+        await self.send_json(panel)
+        return True
+
+    async def close_panel(self, panel_id: str | None = None) -> None:
+        """Close the panel on screen (only ``panel_id`` when given), or drop it while it is held."""
+        held = self.hub._held.get(self.device_id)
+        if held and held.view and held.view[0] == "panel" and panel_id in (None, held.view[1].get("id")):
+            held.view = None
+        await self.send_json(protocol.message("panel.close", id=panel_id) if panel_id
+                             else protocol.message("panel.close"))
+
     async def _send_chunks(self, channel: int, stream: int, data: bytes) -> None:
         """An image's or a colour face's pixels, in binary frames after their *.start."""
         for seq, off in enumerate(range(0, len(data), IMAGE_CHUNK_BYTES)):
@@ -703,6 +737,13 @@ class DeviceSession:
             ttl_s = math.ceil(left)
         if held.view[0] == "card":
             await self.show_card(held.view[1], held.view[2], ttl_s)
+        elif held.view[0] == "panel":
+            if not self.panel_box:  # back on a connection (firmware) that draws none
+                return
+            panel = dict(held.view[1])
+            if ttl_s and ttl_s > 0:
+                panel["ttl_s"] = ttl_s
+            await self.show_panel(panel)
         else:
             await self.show_image(held.view[1], held.view[2], held.view[3], ttl_s)
 
@@ -816,6 +857,7 @@ class DeviceSession:
             "sensors": self.sensors,
             "sensors_age_s": int(time.time() - self.sensors_at) if self.sensors_at else None,
             "display_sleeping": self.display_sleeping,
+            "panel": ({"width": self.panel_box[0], "height": self.panel_box[1]} if self.panel_box else None),
         }
 
     def prompt_context(self) -> str:
@@ -828,6 +870,9 @@ class DeviceSession:
                 "longer replies must be scrolled.")
         parts.append("Replies are also spoken aloud by its speaker." if self.has_speaker
                      else "It has no speaker; replies are only shown on screen.")
+        if self.panel_box:
+            parts.append("Its screen also draws interactive panels (the gadget_panel tool): stat tiles, progress, "
+                         "bars, charts, lists and buttons; a tap on an entry comes back as a [Gadget panel] message.")
         if self.actions:
             names = ", ".join(sorted(self.action_names()))
             parts.append(f"Device actions you can invoke with the gadget_action tool: {names}.")

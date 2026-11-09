@@ -12,7 +12,8 @@ Hermes's gateway runs "platform adapters": Telegram, Slack and about twenty othe
 | `__init__.py` | `register(ctx)`: platform entry, agent tools, `hermes gadget` CLI |
 | `adapter.py` | `GadgetAdapter(BasePlatformAdapter)`: the Hermes-facing side |
 | `hub.py` | WebSocket server, auth, audio, images, actions (no Hermes imports) |
-| `tools.py` | `gadget_devices`, `gadget_display`, `gadget_action` |
+| `tools.py` | `gadget_devices`, `gadget_display`, `gadget_panel`, `gadget_action` |
+| `panel.py` | Checks the `gadget_panel` arguments, builds the `panel` message and words a tap for the agent (no Hermes imports) |
 | `store.py`, `status.py`, `protocol.py`, `audio.py`, `textfmt.py`, `imaging.py` | Support modules (no Hermes imports) |
 | `dashboard/` | The **Gadgets** tab of the Hermes web dashboard: `manifest.json`, the backend routes in `plugin_api.py`, and the tab's bundle in `dist/`, built from `src/` (see [The Gadgets tab](#the-gadgets-tab-in-the-hermes-dashboard)) |
 | `desktop/plugin.js`, `desk.py` | The **Gadgets** page of the Hermes desktop app, built from `desktop-src/`, and the queue that carries its cards and actions to the gateway (see [The Gadgets page in Hermes Desktop](#the-gadgets-page-in-hermes-desktop)) |
@@ -203,6 +204,23 @@ Hermes asks before destructive commands (`/new`, `/undo`), costly model switches
 - **Paired devices only:** a device that is unpaired, or that reconnects unpaired, loses its open questions, and an answer from an unpaired session is ignored.
 - **One at a time:** questions queue per device in arrival order, which matches Hermes's first-in, first-out approval queue. A question asked while the device was offline is shown when it reconnects.
 - **Elsewhere:** answering with `/approve` or `/deny` from another chat still works; the device's copy then reports "That question has expired" if pressed.
+
+### The `gadget_panel` tool
+
+`gadget_panel` shows an [interactive panel](protocol.md#panels) on a touchscreen: stat tiles, progress, bars, a chart, a list or buttons. It works only on a gadget whose `gadget_devices` entry has a `panel` (`{"width": 240, "height": 298}`, the pixels it draws in) rather than `null`; for any other it returns an error that says so, and the agent can fall back to `gadget_display`.
+
+| Argument | Meaning |
+|---|---|
+| `title` | Short title for the panel's top bar |
+| `items` | The panel's items, top to bottom; see the [item types](protocol.md#panels). An item's entries go in its `items` list (`rows` also works) |
+| `id` | The panel's id. Send the same id again to update the panel in place. Without one the plugin makes one up |
+| `seconds` | How long to show it; omit or `0` to keep it until closed |
+| `close` | `true` closes the panel with this `id`, or the one on screen, instead of showing one |
+| `device` | Which gadget, as in the other tools |
+
+The result is JSON with `success`, `device`, the panel's `panel` id, the number of `items` and the `screen` in pixels (`"240x298"`). `notes` lists what the plugin cut or changed so the agent can learn the limits, for example `chart: kept the last 32 of 40 values`. `held` is present when the screen is dark: the panel waits and is shown when it lights up ([screen sleep](protocol.md#screen-sleep)). The plugin applies the device's limits and folds every string to its `charset`; the firmware applies the limits again.
+
+When the user taps an entry that has an `id`, the agent receives a message like `[Gadget panel] The user tapped "Mercado" on the panel "Budget" (panel p1, item cat, value mercado).` It arrives like any other message from the device, so the agent can answer by voice or send the next panel. The per-device context tells the agent that the device draws panels.
 
 ### Agent tools and Hermes tool search
 

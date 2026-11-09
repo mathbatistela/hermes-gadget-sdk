@@ -15,7 +15,7 @@ import json
 import threading
 from typing import Any
 
-from . import runtime, textfmt
+from . import panel as panels, runtime, textfmt
 
 TOOLSET = "gadget"
 CALL_TIMEOUT_S = 20.0
@@ -48,6 +48,67 @@ DISPLAY_SCHEMA = {
             "device": _DEVICE_PARAM,
         },
         "required": ["text"],
+    },
+}
+
+_ENTRY = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string", "description": "Tapping it sends you this id (omit for entries that need no answer)."},
+        "label": {"type": "string"},
+        "value": {"type": "number", "description": "bars: the bar's length (any unit)."},
+        "text": {"type": "string", "description": "The figure shown: a stat's number, a row's value, a bar's amount "
+                                                  "(e.g. \"R$ 1.210\", \"85%\")."},
+        "state": {"type": "string", "enum": ["ok", "warn", "bad", "accent", "primary", "neutral"],
+                  "description": "Colour: ok green, warn yellow, bad red, accent amber; buttons: primary blue, bad red."},
+        "detail": {"type": "string", "description": "Shown on the device when tapped, without asking you."},
+    },
+}
+
+PANEL_SCHEMA = {
+    "name": "gadget_panel",
+    "description": "Show an interactive panel on a gadget's touchscreen (only gadgets whose gadget_devices entry has "
+                   "a panel): a title over a scrolling column of items. Use it for a dashboard-like answer the user "
+                   "will look at and touch: a budget, a homelab status, a list to pick from, a choice. Item types: "
+                   "text (text, style title|dim); stats (2-column tiles: items with label + text); progress (value, "
+                   "max, text, style arc|bar); bars (ranked bars: items with label, value, text); chart (values, "
+                   "labels: first and last shown, style line|columns); list (rows: label, text, state); buttons "
+                   "(items with id + label). An entry with an id is tappable: the tap comes back to you as a "
+                   "message '[Gadget panel] The user tapped ...'; one with a detail shows it on the device. Sending "
+                   "the same id again updates the panel in place; a new id over a panel on screen (a drill-down after a tap) "
+                   "gets a back arrow to the earlier one on the device. Keep labels short (the screen is ~240 px wide); "
+                   "at most 12 items, 8 entries each (lists 16). Speak the headline yourself; the panel is the detail.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "Short title for the panel's top bar."},
+            "items": {
+                "type": "array",
+                "description": "The panel's items, top to bottom.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "enum": ["text", "stats", "progress", "bars", "chart", "list", "buttons"]},
+                        "id": {"type": "string", "description": "Names the item in taps."},
+                        "label": {"type": "string", "description": "Heading above the item (progress: caption)."},
+                        "text": {"type": "string"},
+                        "style": {"type": "string", "description": "text: title|dim; progress: arc|bar; chart: line|columns."},
+                        "value": {"type": "number"},
+                        "max": {"type": "number"},
+                        "state": {"type": "string", "enum": ["ok", "warn", "bad", "accent", "neutral"]},
+                        "values": {"type": "array", "items": {"type": "number"}},
+                        "labels": {"type": "array", "items": {"type": "string"}},
+                        "items": {"type": "array", "items": _ENTRY},
+                    },
+                    "required": ["type"],
+                },
+            },
+            "id": {"type": "string", "description": "Panel id; reuse it to update the panel on screen."},
+            "seconds": {"type": "integer", "description": "How long to show it; omit or 0 to keep it until closed."},
+            "close": {"type": "boolean", "description": "Close the panel with this id (or the one on screen) instead."},
+            "device": _DEVICE_PARAM,
+        },
+        "required": [],
     },
 }
 
@@ -158,6 +219,45 @@ def gadget_display(args: dict, **_kw) -> str:
     return json.dumps(result)
 
 
+def gadget_panel(args: dict, **_kw) -> str:
+    adapter = _adapter()
+    if adapter is None:
+        return _error("gadget hub is not running in this process")
+    session, err = _resolve(adapter, args.get("device"))
+    if err:
+        return _error(err)
+    if session is None:
+        return _error("no connected gadget is available")
+    if (err := _usable(session)):
+        return _error(err)
+    if not session.panel_box:
+        return _error(f"{session.name} draws no panels (no touchscreen, or firmware without them); "
+                      "use gadget_display or an image instead")
+    if args.get("close"):
+        panel_id = str(args.get("id") or "") or None
+        try:
+            _run(adapter, session.close_panel(panel_id))
+        except Exception as exc:
+            return _error(f"could not reach {session.name}: {exc}")
+        return json.dumps({"success": True, "device": session.name, "closed": panel_id or "the panel on screen"})
+    try:
+        message, notes = panels.build(args, session.panel_charset)
+    except panels.PanelError as exc:
+        return _error(str(exc))
+    try:
+        shown = _run(adapter, session.show_panel(message))
+    except Exception as exc:
+        return _error(f"could not reach {session.name}: {exc}")
+    width, height = session.panel_box
+    result: dict = {"success": True, "device": session.name, "panel": message["id"],
+                    "items": len(message["items"]), "screen": f"{width}x{height}"}
+    if notes:
+        result["notes"] = notes
+    if shown is False:
+        result["held"] = "the screen is off; the panel is shown when it lights up"
+    return json.dumps(result)
+
+
 def gadget_action(args: dict, **_kw) -> str:
     adapter = _adapter()
     if adapter is None:
@@ -199,6 +299,7 @@ def register_tools(ctx) -> None:
     for schema, handler, emoji in (
         (DEVICES_SCHEMA, gadget_devices, "📟"),
         (DISPLAY_SCHEMA, gadget_display, "🖥️"),
+        (PANEL_SCHEMA, gadget_panel, "📊"),
         (ACTION_SCHEMA, gadget_action, "🎛️"),
     ):
         ctx.register_tool(

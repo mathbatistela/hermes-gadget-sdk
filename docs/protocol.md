@@ -71,6 +71,7 @@ Because the id is derived from the key, nobody can claim another device's id wit
 - `caps.speaker.buffer_ms` (`4096`) is how much reply audio, in milliseconds, the device can hold before it plays it. The server then sends audio further ahead of real time, which keeps playback smooth on a link whose delay varies, such as a phone hotspot. It is optional: without it the server keeps its default lead. See [Audio to the device](#audio-to-the-device).
 - `caps.ota` (`{"max_size": 2031616}`) means the device installs firmware updates over this connection, up to `max_size` bytes.
 - `caps.dashboard` (`{"v": 1, "rows": 6}`) means the device draws the [dashboard](#dashboard). `v` is the newest layout it draws, and `rows` is how many lines fit on its screen at once.
+- `caps.panel` (`{"v": 1, "width": 240, "height": 298, "charset": "latin1"}`) means the device draws [panels](#panels). `v` is the newest layout it draws, `width` and `height` are the pixels a panel gets (between the top bar and the hint bar), and `charset` is what its panel fonts draw. The reference firmware sends it only on touchscreens whose framebuffer holds the whole screen, not round, built with `CONFIG_HG_PANEL`, and while it has memory for the panel view.
 - `actions` is the device's tool manifest. Each action has a JSON-Schema `params` object and a `description` written for the model.
 - `caps.profiles: true` means the device can switch Hermes profiles (see [Profiles](#profiles)). `profile` is the profile it used last; it is omitted for `default`.
 - `caps.faces: 1` means the device draws a face that the server sends for the profile answering it (see [Faces](#faces)). `caps.faces: {"v": 2, "px": 192}` means it also draws colour faces, at `px` pixels square (at most 256): the largest size its Ready screen draws the face at. Where Ready has less room, for example with a second caption line while the device offers profiles, the device scales the face down. `"frames": true` in that object means its colour faces also blink and talk. `"thumbs": 96` in that object means the device's profile grid also takes a thumbnail of each offered profile, 96 pixels square (16 to 128); see [Profile thumbnails](#profile-thumbnails). `face` is the `hash` of the face it holds from an earlier connection; it is omitted when it shows the mascot. `thumbs` (`{"ops": "9c1d0e2f3a4b5c6d"}`) names the thumbnails it holds from an earlier connection, profile id to `hash`; it is `{}` when it holds none, and omitted by a device without `caps.faces.thumbs`.
@@ -289,6 +290,70 @@ A device that advertises `caps.dashboard` gets a live summary of Hermes: the age
 - A dashboard is data, not a screen takeover: the device keeps showing what it showed. The reference firmware opens it with CANCEL (a swipe down on touch boards) on the idle screen and closes it with CANCEL again. Talking, a question, a card or an image take the screen over. It forgets the dashboard when the connection drops, and the next connection sends it again.
 - While the screen is dark, only the latest dashboard is kept; see [Screen sleep](#screen-sleep).
 
+### Panels
+
+A device that advertises `caps.panel` draws a panel: a small interactive screen Hermes describes in JSON, a title over a scrolling column of items. A panel can be touched: a tap on an entry goes back to the agent. The Hermes plugin sends one with the `gadget_panel` tool ([Hermes integration](hermes-integration.md#the-gadget_panel-tool)).
+
+```json
+{"type": "panel", "id": "p1", "title": "Budget", "ttl_s": 0,
+ "items": [
+   {"type": "stats", "items": [{"label": "Spent", "text": "R$ 3.210"}, {"label": "Left", "text": "R$ 790", "state": "ok"}]},
+   {"type": "bars", "label": "By category", "items": [
+     {"id": "mercado", "label": "Mercado", "value": 1210, "text": "R$ 1.210", "detail": "38 purchases"},
+     {"id": "casa", "label": "Casa", "value": 640, "text": "R$ 640", "state": "warn"}]},
+   {"type": "buttons", "items": [{"id": "ok", "label": "Looks right", "state": "primary"}]}]}
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | Names the panel. Required: a panel without an `id` is refused |
+| `title` | Text in the panel's title bar |
+| `ttl_s` | Seconds to show it; `0` or absent keeps it until closed |
+| `items` | The items, top to bottom. `rows` is accepted for an item's `items` list, not for the panel's |
+
+Item types. Every item may carry an `id`, which names it in the tap event, and a `label`, a heading over it (under it for `progress`).
+
+| `type` | Fields | Drawn as |
+|---|---|---|
+| `text` | `text`; `style`: `title` or `dim` | A paragraph |
+| `stats` | `items`: entries with `label` and `text` (or `value`) | Tiles in two columns |
+| `progress` | `value`; `max` (100); `text` (the percentage); `style`: `arc` or `bar` (default); `state` | An arc or a bar with a figure |
+| `bars` | `items`: entries with `label`, `value` (a number: the bar's length), `text` (shown at the right, default the number), `state` | Bars scaled to the longest |
+| `chart` | `values`: at least 2 numbers; `labels`: the first and last are drawn under it; `style`: `line` (default) or `columns` | A chart |
+| `list` | `items`: entries with `label`, `text` (or `value`), `state` (a coloured dot) | Rows; a row with an `id` shows a chevron |
+| `buttons` | `items`: entries with `id` and `label`; `state`: `primary`, `ok` or `bad` colours it | Buttons |
+
+An entry takes `id`, `label`, `text` or `value`, `state` and `detail`. `state` is `ok` (green), `warn` (yellow), `bad` (red), `accent` (amber), `primary` (a button's own colour) or `neutral`. A button needs both an `id` and a `label`; one without is dropped.
+
+Limits. The device cuts what is over a limit and never refuses it:
+
+| What | Limit |
+|---|---|
+| Items in a panel | 12 |
+| Entries in an item | 8 (16 in a `list`) |
+| Chart values | 32 |
+| A label, `text` or value | 160 bytes (320 for a `text` item's `text`) |
+| An entry's `detail` | 320 bytes |
+| An `id` | 48 bytes |
+
+The device refuses a panel only when it has no `id` or nothing it can draw. Unknown item types and fields are skipped. Text is drawn in Montserrat at 12, 14, 18 and 26 px: Latin-1 for the first three, ASCII with a fallback for the large size. The plugin folds text to `charset` before sending.
+
+- **Update.** A panel with the `id` and the title of the one on screen replaces it in place and keeps its scroll position. The same `id` with another title counts as another panel, since agents reuse an id for the detail they open from it. A panel with another `id` replaces it from the top.
+- **Back.** A panel with another `id` that arrives while one is on screen (usually the answer to a tap) keeps the one under it, with its scroll position, and shows a back arrow before its title. A tap on the arrow returns to the earlier panel on the device, with no round trip, and sends `{"type": "event", "name": "panel.back", "notify": false, "data": {"panel": "p1", "from": "p2"}}` for the logs. The device keeps up to 3 earlier panels and forgets the oldest. A panel whose `id` is one of them goes back to it instead of adding a level. `panel.close` with an earlier panel's `id` removes it from the list; closing the panel on screen forgets them all.
+- **Close.** `{"type": "panel.close", "id": "p1"}` closes the panel; without `id` it closes whichever is on screen. The user closes it with the **x** in its title bar, or with CANCEL or a swipe down from the bars. `ttl_s` closes it too, and so does a card or an image. A question, a recording or the timer alarm take the screen over; the panel is drawn again afterwards.
+- **Taps.** Dragging scrolls. A tap on an entry with an `id` sends a `panel.tap` event with `notify: true`, so the agent reads it as a message, and the device shows "Sent to Hermes". An entry with a `detail` shows it in a strip at the bottom for 8 s, or until a tap hides it, without asking the server; with both, it does both.
+
+```json
+{"type": "event", "name": "panel.tap", "notify": true,
+ "data": {"panel": "p1", "item": "cat", "value": "mercado", "label": "Mercado"}}
+```
+
+`panel` is the panel's `id`, `item` the `id` of the item holding the entry, `value` the entry's `id` and `label` its label. The plugin turns the event into `[Gadget panel] The user tapped "Mercado" on the panel "Budget" (panel p1, item cat, value mercado).`
+- **Talking.** Holding a still finger on the panel, off anything tappable, for about 0.45 s records, when touch talk is on.
+- **Screen sleep.** While the screen is dark the server holds the latest panel like a card or image and sends it when the screen lights up, with the time its `ttl_s` has left; see [Screen sleep](#screen-sleep).
+
+Panels have been tested in the simulator and in host tests only; they have not been run on a board yet.
+
 ### Questions
 
 Hermes asks before some actions: destructive commands such as `/new`, a costly model switch, or a dangerous shell command the agent wants to run. The server turns each one into a `prompt`:
@@ -326,6 +391,8 @@ A device with a camera may advertise `camera.capture` in `hello.actions`; it tak
 | `{"type": "state", "display_sleeping": true}` | The screen went dark (`false`: it lit up); see [Screen sleep](#screen-sleep) |
 | `{"type": "event", "name": "button.long_press", "data": {...}, "notify": false}` | With `notify: true`, the event is delivered to the agent as a message |
 | `{"type": "event", "name": "timer.done", "data": {"label": "Pasta"}, "notify": false}` | The device's timer ran out (the label is empty when none was set). It always has `notify: false`: the alarm is the device's own, and Hermes is not interrupted. Dropped while the device is offline |
+| `{"type": "event", "name": "panel.back", "data": {"panel": "p1", "from": "p2"}, "notify": false}` | The user went back from panel `p2` to the earlier panel `p1` with the back arrow; see [Panels](#panels). Logged only |
+| `{"type": "event", "name": "panel.tap", "data": {"panel": "p1", "item": "cat", "value": "mercado", "label": "Mercado"}, "notify": true}` | The user tapped a panel entry that has an `id`; see [Panels](#panels). The plugin delivers it to the agent as a message |
 
 ### Firmware updates
 

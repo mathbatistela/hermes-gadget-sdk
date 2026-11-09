@@ -331,6 +331,7 @@ const char* screen_name(Screen s) {
     case Screen::LowBattery: return "low_battery";
     case Screen::Charging: return "charging";
     case Screen::Charged: return "charged";
+    case Screen::Panel: return "panel";
   }
   return "unknown";
 }
@@ -656,9 +657,9 @@ void Ui::draw_frame(const UiModel& m) {
       hash_[i] = 0;
       continue;
     }
-    // An image owns the area between the bars; the app draws and flushes it. The
-    // camera screen does too (the port paints the live view there; see App::camera_draw).
-    if ((m.screen == Screen::Image || m.screen == Screen::Camera) && (i == 1 || i == 2)) {
+    // An image, a panel or the camera owns the area between the bars; the app draws and
+    // flushes it (the port paints the camera's live view there; see App::camera_draw).
+    if ((m.screen == Screen::Image || m.screen == Screen::Camera || m.screen == Screen::Panel) && (i == 1 || i == 2)) {
       hash_[i] = 0;
       continue;
     }
@@ -875,6 +876,7 @@ void Ui::draw_indicator(Canvas& c, const UiModel& m, int cx, int cy, int r) {
     }
     case Screen::Image:
     case Screen::Camera:  // the area between the bars belongs to the camera/App; see draw_frame
+    case Screen::Panel:
     case Screen::Settings:
     case Screen::Setup:
     case Screen::Profiles:

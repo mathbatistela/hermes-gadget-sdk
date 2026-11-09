@@ -36,9 +36,18 @@ endif()
 if(IDF_TARGET STREQUAL "esp32s3" OR IDF_TARGET STREQUAL "esp32p4")
     list(APPEND HG_RGB_REQUIRES esp_lcd_st7701 esp_lcd_panel_io_additions)
 endif()
+# Panels (Kconfig HG_PANEL): the core's LVGL view and its fonts build here, with LVGL.
+set(HG_PANEL_SOURCES)
+set(HG_PANEL_REQUIRES)
+if(CONFIG_HG_PANEL)
+    file(GLOB HG_PANEL_SOURCES "${CMAKE_CURRENT_LIST_DIR}/../../core/src/panel_fonts/*.c")
+    list(APPEND HG_PANEL_SOURCES "../../core/src/panel_lvgl.cpp")
+    list(APPEND HG_PANEL_REQUIRES lvgl__lvgl)
+endif()
 idf_component_register(
     SRCS
         "main.cpp"
+        ${HG_PANEL_SOURCES}
         "board.cpp"
         "port_amoled.cpp"
         "port_audio.cpp"
@@ -94,6 +103,7 @@ idf_component_register(
         esp_adc
         esp_event
         esp_lcd
+        ${HG_PANEL_REQUIRES}
         ${HG_RGB_REQUIRES}
         ${HG_P4_REQUIRES}
         ${HG_CORES3_CAMERA_REQUIRES}
@@ -111,3 +121,14 @@ idf_component_register(
         # Empty unless CONFIG_HG_TAILNET (components/tailtiny).
         tailtiny
 )
+
+# Panels (Kconfig HG_PANEL): LVGL reads firmware/core/lvgl/lv_conf.h, never Kconfig, so the
+# simulator draws what the device draws. The firmware builds for size (-Os); LVGL's pixel
+# loops are worth -O2 (the LVGL spike measured 10% more frames).
+if(CONFIG_HG_PANEL)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE HG_PANEL=1)
+    idf_component_get_property(hg_lvgl_lib lvgl__lvgl COMPONENT_LIB)
+    target_compile_definitions(${hg_lvgl_lib} PUBLIC
+        "LV_CONF_PATH=\"${CMAKE_CURRENT_LIST_DIR}/../../core/lvgl/lv_conf.h\"" LV_KCONFIG_IGNORE)
+    target_compile_options(${hg_lvgl_lib} PRIVATE -O2)
+endif()

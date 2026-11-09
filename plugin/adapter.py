@@ -67,6 +67,7 @@ from . import status as live_status
 from . import face as faces
 from .battery_log import BatteryLog
 from .hub import DeviceHub, DeviceSession, HubDelegate
+from .panel import tap_text as panel_tap_text
 from .store import DeviceStore
 
 logger = logging.getLogger(__name__)
@@ -1062,10 +1063,13 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
         logger.info("[%s] event from %s: %s %s", self.name, session.device_id, name, data)
         if not notify:
             return
-        payload = json.dumps(data, separators=(",", ":"))[:500] if data is not None else ""
+        if name == "panel.tap":  # docs/protocol.md#panels: what the user tapped, in words
+            text = panel_tap_text(data, session.panel_titles)
+        else:
+            payload = json.dumps(data, separators=(",", ":"))[:500] if data is not None else ""
+            text = f"[Gadget event] {name} {payload}".strip()
         await self._forward(session, self._event(
-            session, f"ev-{uuid.uuid4().hex[:6]}", f"[Gadget event] {name} {payload}".strip(),
-            message_type=MessageType.TEXT, allow_gateway_control=False))
+            session, f"ev-{uuid.uuid4().hex[:6]}", text, message_type=MessageType.TEXT, allow_gateway_control=False))
 
     async def on_state(self, session: DeviceSession, sensors: dict) -> None:
         # Only paired devices: an unpaired one could otherwise write files at will.
