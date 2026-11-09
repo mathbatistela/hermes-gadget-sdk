@@ -1,17 +1,17 @@
 > [!NOTE]
 > **This is a fork of [Adolanium/hermes-gadget-sdk](https://github.com/Adolanium/hermes-gadget-sdk).**
 > Upstream is where the project lives: its issues, releases and browser installer are the
-> ones to use. This fork carries work for one more board and features not yet upstream;
-> each one sits on its own branch, based on upstream `main`, so it can go back as a pull request.
+> ones to use. This fork's `main` is upstream's `main` plus the features below, kept in step
+> with upstream by merging it in. It is what our own gadget runs.
 >
-> | Added here | Branch | State |
+> | Added here | Pull request branch | State |
 > |---|---|---|
 > | **LCDWIKI ES3C28P** board profile (2.8" 240×320 ILI9341V, FT6336G touch, ES8311 mic and speaker; also sold as Freenove's ESP32-S3 2.8") | [`board/lcdwiki-es3c28p`](https://github.com/mathbatistela/hermes-gadget-sdk/tree/board/lcdwiki-es3c28p) | experimental, runs on the board |
 > | **Panels**: interactive screens Hermes describes in JSON and the device draws with LVGL 9.3 (stats, arc, bars, chart, list, buttons), with taps back to the agent, a back arrow between panels, an on-device `panel test`, and the `gadget_panel` plugin tool | [`feat/lvgl-panel`](https://github.com/mathbatistela/hermes-gadget-sdk/tree/feat/lvgl-panel) | runs on the ES3C28P |
 > | **Yes/no clarify**: an agent question with exactly two choices becomes the device's own yes/no question | [`feat/clarify-yes-no`](https://github.com/mathbatistela/hermes-gadget-sdk/tree/feat/clarify-yes-no) | host tests |
-> | **`set rotate 180`**: turns the screen and the touch upside down, at once and kept across restarts | [`kitsune/deploy`](https://github.com/mathbatistela/hermes-gadget-sdk/tree/kitsune/deploy) | runs on the ES3C28P |
+> | **`set rotate 180`**: turns the screen and the touch upside down, at once and kept across restarts | `main` only, for now | runs on the ES3C28P |
 >
-> [`kitsune/deploy`](https://github.com/mathbatistela/hermes-gadget-sdk/tree/kitsune/deploy) merges all of the above and is what our own gadget runs.
+> Each pull request branch holds one feature on top of upstream `main`, so it can go back upstream on its own.
 > Two spikes are kept for reference and are not meant to merge:
 > [`spike/lvgl`](https://github.com/mathbatistela/hermes-gadget-sdk/tree/spike/lvgl) (LVGL benchmark) and [`spike/wakeword`](https://github.com/mathbatistela/hermes-gadget-sdk/tree/spike/wakeword) ("Hey Hermes" with ESP-SR WakeNet).
 > The rest of this README is upstream's, unchanged.
