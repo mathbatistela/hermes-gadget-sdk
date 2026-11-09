@@ -121,13 +121,15 @@ class GadgetTTSHandle(StreamingTTSHandle):
 class _Prompt:
     """A question shown on a device, and how to hand its answer back to Hermes."""
     id: str
-    kind: str  # "slash" (tools.slash_confirm) or "approval" (tools.approval)
+    kind: str  # "slash" (tools.slash_confirm), "approval" (tools.approval) or "clarify" (a two-way clarify)
     session_key: str
     title: str
     text: str
     confirm_id: str = ""
     ttl_s: Optional[float] = None
     host_only: bool = False  # the device can't show the whole command, so its YES is refused
+    clarify_id: str = ""  # kind "clarify": the question tools.clarify_gateway waits on
+    answers: Tuple[str, str] = ("", "")  # kind "clarify": what YES and NO answer, in the agent's words
     created: float = field(default_factory=time.monotonic)
 
     def expired(self) -> bool:
@@ -155,6 +157,13 @@ def spoken_question(question: str, choices: Optional[list]) -> str:
         listed = " ".join(f"{i}: {c.rstrip('.')}." for i, c in enumerate(picks, start=1))
         text = f"{text} The choices are {listed} Say the number or your own answer."
     return text
+
+
+def two_way_choices(choices: Optional[list]) -> Optional[Tuple[str, str]]:
+    """The two answers of a clarify the device can ask as a yes/no question, else None.
+    The first choice is the device's YES (TALK, a tap), the second its NO (CANCEL, a swipe)."""
+    picks = [str(c).strip() for c in choices or [] if str(c).strip()]
+    return (picks[0], picks[1]) if len(picks) == 2 else None
 
 
 def transcript_echo(content: str) -> Optional[str]:
@@ -1261,6 +1270,14 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
             await session.send_notice("That question has expired")
         elif prompt.kind == "slash":
             await self._answer_slash(session, prompt.session_key, prompt.confirm_id, "once" if yes else "cancel")
+        elif prompt.kind == "clarify":
+            from tools.clarify_gateway import resolve_gateway_clarify
+
+            answer = prompt.answers[0] if yes else prompt.answers[1]
+            if resolve_gateway_clarify(prompt.clarify_id, answer):
+                await session.send_notice(textfmt.for_device(answer, session.charset))
+            else:
+                await session.send_notice("That question has expired")
         else:
             from tools.approval import resolve_gateway_approval
 
@@ -1285,16 +1302,47 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
 
     async def send_clarify(self, chat_id: str, question: str, choices: Optional[list], clarify_id: str,
                            session_key: str, metadata: Optional[Dict[str, Any]] = None) -> SendResult:
-        """A question from the agent (Hermes's clarify tool). The device shows only yes/no prompts,
-        so the question goes out as Hermes's own text (numbered choices; the next message, spoken
-        or typed, is the answer) and, on a device that speaks replies, is also spoken: otherwise a
-        voice user hears nothing while the agent waits."""
+        """A question from the agent (Hermes's clarify tool).
+
+        With exactly two choices the device asks it as its own yes/no question: the first choice
+        is YES (TALK, a tap), the second NO (CANCEL, a swipe), and the press answers the clarify.
+        A spoken or typed answer still counts (the gateway's text intercept), and then the
+        question leaves the screen (retire_clarify_card). Any other shape goes out as Hermes's
+        own text (numbered choices; the next message is the answer). On a device that speaks
+        replies the question is also spoken: otherwise a voice user hears nothing while the
+        agent waits."""
+        session = self._session(chat_id)
+        pair = two_way_choices(choices)
+        if pair and session is not None and session.paired:
+            from tools.clarify_gateway import get_clarify_timeout, mark_awaiting_text
+
+            mark_awaiting_text(clarify_id)  # an answer by voice or text resolves it too
+            yes, no = (textfmt.for_device(c, session.charset) for c in pair)
+            prompt = _Prompt(id=uuid.uuid4().hex[:8], kind="clarify", session_key=session_key,
+                             title=textfmt.for_device(question, session.charset), text=f"Yes: {yes}\nNo: {no}",
+                             clarify_id=clarify_id, answers=pair, ttl_s=float(get_clarify_timeout()))
+            result = await self._ask(session, prompt)
+            if result.success and self._should_auto_tts_for_chat(chat_id):
+                session.spawn(self._speak(chat_id, (question or "").strip()))  # the choices are on screen
+            return result
         result = await super().send_clarify(chat_id=chat_id, question=question, choices=choices,
                                             clarify_id=clarify_id, session_key=session_key, metadata=metadata)
-        session = self._session(chat_id)
         if result.success and session is not None and session.paired and self._should_auto_tts_for_chat(chat_id):
             session.spawn(self._speak(chat_id, spoken_question(question, choices)))
         return result
+
+    async def retire_clarify_card(self, clarify_id: str, notice: Optional[str] = None) -> None:
+        """The gateway ends a clarify that no press answered (a spoken or typed answer, a timeout,
+        a new session): take its yes/no question off the device."""
+        for device_id, queue in list(self._prompts.items()):
+            for prompt in list(queue):
+                if prompt.kind != "clarify" or prompt.clarify_id != clarify_id:
+                    continue
+                session = self._session(device_id)
+                if session is not None:
+                    await self._withdraw_prompt(session, prompt.id)
+                else:
+                    self._take_prompt(device_id, prompt.id)
 
     async def _speak(self, chat_id: str, text: str) -> None:
         """Speak ``text`` on the device with Hermes's configured text-to-speech."""

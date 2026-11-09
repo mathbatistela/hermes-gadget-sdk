@@ -39,6 +39,8 @@
 
 ### Hermes plugin
 
+- Plugin: an agent question with exactly two choices is asked as the device's own yes/no question (the first choice is YES, the second NO), and the press answers it. A spoken or typed answer still counts and takes the question off the screen. Other questions stay text.
+
 - **A device that reconnects is welcomed at once.** After a device rebooted or changed networks, its old connection still looked open. The new connection closed the old one and waited for that close before sending the welcome, and the old connection's peer is gone, so the wait lasted until TCP gave up or the device's new network stack reset it. That took 0.07 to 3 s per reconnect on an AMOLED-1.75C over the tailnet, and in the meantime the pairing check sent `paired` and the dashboard before the welcome. The old connection now closes in the background. Contributed by Antonio Lourenco (@tozes).
 
 ## 0.5.0
