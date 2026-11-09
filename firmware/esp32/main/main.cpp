@@ -109,6 +109,25 @@ void apply_touch_cancel() {
   if (g_gestures) g_gestures->set_swipe_cancel(g_swipe_cancel);
 }
 
+// rotate: "180" turns the picture and the touch upside down, for a gadget
+// mounted or stood the other way up; "0" (the default) keeps the board's own
+// orientation. Offered only where the SPI panel can flip (SpiDisplay::can_flip).
+bool g_can_rotate = false;
+bool g_rotate_touch = false;
+
+void apply_rotate() {
+  if (!g_can_rotate) return;
+  auto v = g_storage.get("rotate");
+  const bool flip = v && *v == "180";
+  if (!g_display.set_flipped(flip)) return;
+#if !CONFIG_HG_BOARD_ESP32_CYD
+  if (g_rotate_touch) {
+    const auto& lcd = hgp::board_config().lcd;
+    g_touch.set_flip(flip ? lcd.width : 0, flip ? lcd.height : 0);
+  }
+#endif
+}
+
 // The name a phone sees: the `name` setting, as hg::App uses it.
 #if !CONFIG_HG_BOARD_ESP32_CYD  // the CYD has no Bluetooth phone link
 std::string device_name() {
@@ -615,6 +634,12 @@ extern "C" void app_main(void) {
     profile.extra_settings = {"touch_cancel"};
   }
   profile.extra_settings.push_back("timezone");  // the port keeps its own time
+  g_can_rotate = hal.display == &g_display && g_display.can_flip();
+#if !CONFIG_HG_BOARD_ESP32_CYD
+  g_rotate_touch = touch && board.touch.enabled;
+#endif
+  if (g_can_rotate) profile.extra_settings.push_back("rotate");
+  apply_rotate();  // before the first frame
   profile.motion_sensor = imu;
 #if !CONFIG_HG_BOARD_ESP32_CYD
   if (hal.mic == &g_codec_mic) {
@@ -644,6 +669,7 @@ extern "C" void app_main(void) {
     if (key == "wifi_ssid" || key == "wifi_pass") app.close_wifi_setup();
     if (key == "wifi_ssid" || key == "wifi_pass" || key == "wifi_nets") g_wifi.networks_changed();
     if (key == "touch_cancel") apply_touch_cancel();
+    if (key == "rotate") apply_rotate();
     if (key == "clock") g_time.set_wanted(app.clock_enabled());
     if (key == "timezone") g_time.apply_timezone(g_storage);
 #if !CONFIG_HG_BOARD_ESP32_CYD

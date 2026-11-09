@@ -320,6 +320,19 @@ bool SpiDisplay::begin(const LcdConfig& cfg, i2c_master_bus_handle_t i2c_bus) {
   return true;
 }
 
+bool SpiDisplay::set_flipped(bool on) {
+  if (!can_flip()) return false;
+  if (on == flipped_) return true;
+  if (!esp_ok(esp_lcd_panel_mirror(panel_, cfg_.mirror_x != on, cfg_.mirror_y != on), TAG, "esp_lcd_panel_mirror"))
+    return false;
+  flipped_ = on;
+  // The panel's memory still holds the picture, now scanned the other way round.
+  // A whole framebuffer goes again at once; a banded one asks the app to redraw.
+  if (frame_rows_ >= cfg_.height) flush(0, cfg_.height);
+  else repaint_.store(true, std::memory_order_relaxed);
+  return true;
+}
+
 hg::DisplayInfo SpiDisplay::info() const {
   hg::DisplayInfo di;
   di.width = cfg_.width;

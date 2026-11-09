@@ -281,6 +281,12 @@ class SpiDisplay final : public hg::Display {
   int framebuffer_rows() const override { return frame_rows_ < cfg_.height ? frame_rows_ : 0; }
   void set_frame_origin(int y) override { frame_origin_ = y; }
   bool take_redraw_request() override { return repaint_.exchange(false, std::memory_order_relaxed); }
+  // The `rotate` setting: turns the picture 180 degrees from the board's own
+  // orientation by flipping both mirror bits, then sends the picture again.
+  // False on a panel that cannot mirror (SH8601) or whose glass sits off-centre
+  // in the controller's memory (a gap: the flip would shift the picture).
+  bool can_flip() const { return panel_ && cfg_.controller != LcdController::Sh8601 && !cfg_.gap_x && !cfg_.gap_y; }
+  bool set_flipped(bool on);
   std::function<void(uint8_t)> board_backlight;
 
  private:
@@ -297,6 +303,7 @@ class SpiDisplay final : public hg::Display {
   int frame_origin_ = 0;  // panel row the first framebuffer row maps to
   std::atomic<bool> repaint_{false};  // a transfer was lost: redraw the screen
   bool paused_ = false;  // a banded flush timed out and its transfer is still pending
+  bool flipped_ = false;  // set_flipped(true): both mirror bits inverted
 };
 
 // I2S MEMS microphone: a reader task posts 20 ms PCM16 chunks while capturing.
@@ -575,6 +582,11 @@ class TouchInput {
   void nudge();  // ends the task's wait now, e.g. so a doze's end re-arms the INT edge at once
   // The touch_wake setting: off, a doze leaves INT quiet instead of arming it as a wake source.
   void set_wakes(bool on) { wakes_ = on; nudge(); }
+  // The `rotate` setting: a touch at (x, y) lands at (width-1-x, height-1-y),
+  // in screen coordinates. 0 x 0 turns it off.
+  void set_flip(uint16_t width, uint16_t height) {
+    flip_.store((static_cast<uint32_t>(width) << 16) | height, std::memory_order_relaxed);
+  }
 
  private:
   static void task(void* arg);
@@ -602,6 +614,7 @@ class TouchInput {
   bool sleep_wake_ = false;               // touch_.int_wakes, and the INT gate and sleep hook are in place
   bool sleep_wake_armed_ = false;         // dozing: INT's edge ISR is off (and INT wakes light sleep if wakes_)
   std::atomic<bool> wakes_{true};         // the touch_wake setting
+  std::atomic<uint32_t> flip_{0};         // set_flip: width << 16 | height, 0 when off
   bool quiet_ = false;                    // this doze leaves INT quiet (wakes_ was off when it began)
   void* task_ = nullptr;                  // the touch task, woken by an edge
   gpio_num_t encoder_a_ = GPIO_NUM_NC;

@@ -462,6 +462,10 @@ void TouchInput::task(void* arg) {
     if (self->has_touch() && self->may_read(was_touching) && self->read_touch(s)) {
       // Glass rows above the UI inset still belong to the top bar, not off-screen.
       s.y = static_cast<int16_t>(std::max(0, s.y - self->touch_.offset_y));
+      if (const uint32_t flip = self->flip_.load(std::memory_order_relaxed)) {  // the rotate setting
+        s.x = static_cast<int16_t>(std::max(0, static_cast<int>(flip >> 16) - 1 - s.x));
+        s.y = static_cast<int16_t>(std::max(0, static_cast<int>(flip & 0xFFFF) - 1 - s.y));
+      }
       fault.valid();
       // Every sample while the finger is down (gestures need the motion), plus the lift.
       if (s.touching || was_touching) {
