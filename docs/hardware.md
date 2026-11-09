@@ -313,7 +313,7 @@ References: Espressif's [Korvo-2 BSP](https://github.com/espressif/esp-bsp/tree/
 
 ## LCDWIKI ES3C28P
 
-Use `lcdwiki-es3c28p` for the LCDWIKI ES3C28P (Shenzhen QDtech, spec sheet CR2025-MI6872 V1.0): a 2.8 inch IPS display module with an ESP32-S3, 16 MB QSPI flash and 8 MB octal PSRAM. Freenove's ESP32-S3 2.8 inch display uses the same pin map. The ES3N28P is the same board without the touchscreen and has no profile. This port is experimental and has not run on a board.
+Use `lcdwiki-es3c28p` for the LCDWIKI ES3C28P (Shenzhen QDtech, spec sheet CR2025-MI6872 V1.0): a 2.8 inch IPS display module with an ESP32-S3, 16 MB QSPI flash and 8 MB octal PSRAM. Freenove's ESP32-S3 2.8 inch display uses the same pin map. The ES3N28P is the same board without the touchscreen and has no profile. This port is experimental, with an owner smoke test on one unit in the [verification table](hardware-validation.md).
 
 | Part | Connection |
 |---|---|
@@ -324,7 +324,7 @@ Use `lcdwiki-es3c28p` for the LCDWIKI ES3C28P (Shenzhen QDtech, spec sheet CR202
 | Speaker amplifier | Enable on GPIO 1, active low, held low from boot as a power rail. 1.25 mm 2-pin speaker jack, up to 1.5 W at 8 Ω or 2 W at 4 Ω |
 | Battery | GPIO 9 (ADC1 channel 8), 200 kΩ/200 kΩ divider. 3.7 V Li-polymer on a 1.25 mm 2-pin jack. No charge pin and no software power-off |
 
-The panel runs in portrait with X mirrored, the usual ILI9341 portrait setting: upstream runs it in landscape with only the axis swap, so the unflagged scan is a mirror image. Portrait keeps the touch controller's own axes, because the FT5x06 touch path applies no swap or mirror; if touch lands mirrored on a unit, the profile alone cannot correct it. Color order is BGR and color inversion is on, as in upstream's setup. The SPI clock is 20 MHz, as upstream uses. To preview the layout, run `hermes-gadget sim --board sim-240x320`.
+The panel runs in portrait with X mirrored, the usual ILI9341 portrait setting: upstream runs it in landscape with only the axis swap, so the unflagged scan is a mirror image. Portrait keeps the touch controller's own axes, because the FT5x06 touch path applies no swap or mirror; on the tested unit touch lines up with the picture up to the edges and corners. If it lands mirrored on another unit, the profile alone cannot correct it. Color order is BGR and color inversion is on, as in upstream's setup. The SPI clock is 20 MHz, as upstream uses. To preview the layout, run `hermes-gadget sim --board sim-240x320`.
 
 Hold the screen or BOOT to talk and swipe down to cancel. RESET is CHIP_PU. The RGB LED on GPIO 42 has a built-in control IC, so the plain `led.set` action does not drive it and it stays off. The microSD slot (SDIO on GPIO 38 to 41, 47 and 48), the UART header and the extension pins (GPIO 2, 3, 14 and 21) are unused.
 
